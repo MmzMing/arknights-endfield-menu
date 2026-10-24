@@ -164,6 +164,93 @@
 .ef-idlg__jump svg { width: 15px; height: 15px; fill: none; stroke: currentColor; stroke-width: 2.6; stroke-linecap: round; stroke-linejoin: round; }
 .ef-idlg__jump:hover, .ef-idlg__jump:focus-visible { background: var(--ef-yellow); color: #10120d; }
 .ef-idlg__row:has(.ef-idlg__jump) { grid-template-columns: 122px minmax(30px, 1fr) minmax(104px, auto) auto; }
+
+/* ---- 外链列表（RSS 条目 / 友链）：列表自身滚动，标题在左、附注（日期/描述）在右，点击新标签页打开。 ---- */
+.ef-idlg__links {
+  display: flex; flex-direction: column; min-height: 0; margin-top: 16px; overflow-y: auto;
+  border-top: 1px solid rgba(16,18,13,0.62); scrollbar-width: thin;
+}
+.ef-idlg__links::-webkit-scrollbar { width: 6px; }
+.ef-idlg__links::-webkit-scrollbar-thumb { background: rgba(16,18,13,0.35); }
+.ef-idlg__link {
+  display: flex; align-items: baseline; justify-content: space-between; gap: 12px; padding: 9px 7px;
+  border-bottom: 1px solid rgba(16,18,13,0.28); color: inherit; text-decoration: none;
+  cursor: url("/mouse/link.cur"), pointer;
+}
+.ef-idlg__link-source {
+  flex: none; max-width: 130px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+  font-size: 11px; font-weight: 700; opacity: 0.72;
+}
+.ef-idlg__link span { flex: 1 1 auto; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 13px; font-weight: 600; }
+.ef-idlg__link small {
+  flex: none; max-width: 55%; overflow: hidden; text-overflow: ellipsis;
+  font-family: var(--ef-font-mono); font-size: 9px; letter-spacing: 0.08em; opacity: 0.62;
+}
+.ef-idlg__link:hover span, .ef-idlg__link:focus-visible span { text-decoration: underline; }
+
+/* ---- 分组卡片（技术栈）：左侧是分组 label（列表），右侧是技术名的多列卡片；整块可滚动。 ---- */
+.ef-idlg__groups { display: flex; flex-direction: column; min-height: 0; margin-top: 16px; overflow-y: auto; scrollbar-width: thin; }
+.ef-idlg__groups::-webkit-scrollbar { width: 6px; }
+.ef-idlg__groups::-webkit-scrollbar-thumb { background: rgba(16,18,13,0.35); }
+.ef-idlg__group {
+  display: grid; grid-template-columns: 96px minmax(0, 1fr); align-items: start; gap: 14px;
+  padding: 10px 0; border-top: 1px solid rgba(16,18,13,0.45);
+}
+.ef-idlg__group-label { margin: 0; padding-top: 4px; font-size: 12px; font-weight: 700; letter-spacing: 0.09em; }
+.ef-idlg__group-items { display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 6px; margin: 0; padding: 0; list-style: none; }
+/* 卡片按等级取色（色板与排版对齐 3D-HOME 的 profile-card）：等级色只落在描边、品牌图标与等级字上，
+   卡面是纸上薄薄一层同色；max 额外套一圈流动彩虹描边 + 彩虹等级字。 */
+.ef-idlg__group-items li {
+  --lv: #eab308;
+  display: flex; align-items: center; gap: 7px; min-height: 28px; padding: 4px 9px;
+  border: 1px solid color-mix(in srgb, var(--lv) 40%, rgba(16,18,13,0.34));
+  border-radius: 4px;
+  background: color-mix(in srgb, var(--lv) 10%, transparent);
+  color: #10120d;
+}
+.ef-idlg__tech-icon { flex: none; width: 13px; height: 13px; color: var(--lv); }
+/* 右侧两行：名称在上、等级在下（图标单独在左，不做三段横排）。 */
+.ef-idlg__group-body { display: flex; flex: 1 1 auto; flex-direction: column; align-items: flex-start; min-width: 0; }
+.ef-idlg__group-name {
+  max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+  font-family: var(--ef-font-cn); font-size: 11px; font-weight: 600;
+}
+.ef-idlg__group-body > small {
+  font-family: var(--ef-font-mono); font-size: 8px; font-weight: 700;
+  letter-spacing: 0.12em; text-transform: uppercase;
+  /* 等级字在浅色卡面上压暗一点，保证黄/青这类亮色也读得清 */
+  color: color-mix(in srgb, var(--lv) 72%, #10120d);
+}
+.ef-idlg__group-items li[data-level="low"] { --lv: #eab308; }
+.ef-idlg__group-items li[data-level="medium"] { --lv: #22c55e; }
+.ef-idlg__group-items li[data-level="high"] { --lv: #b1b9f9; }
+.ef-idlg__group-items li[data-level="xhigh"] { --lv: #af87ff; }
+.ef-idlg__group-items li[data-level="ultra"] { --lv: #ec4899; }
+.ef-idlg__group-items li[data-level="max"] {
+  --lv: #a855f7;
+  border: 1.5px solid transparent;
+  background:
+    linear-gradient(90deg, #f43f5e, #f97316, #eab308, #22c55e, #3b82f6, #8b5cf6, #f43f5e) 0 0 / 200% 100% border-box,
+    linear-gradient(#f5f4ee, #f5f4ee) padding-box;
+  animation: efIdlgRainbow 3s linear infinite;
+  box-shadow: 0 0 7px rgb(167 139 250 / 0.35);
+}
+.ef-idlg__group-items li[data-level="max"] .ef-idlg__group-body > small {
+  color: transparent;
+  background: linear-gradient(90deg, #f43f5e, #f97316, #eab308, #22c55e, #3b82f6, #8b5cf6);
+  background-clip: text;
+  filter: drop-shadow(0 0 4px rgb(167 139 250 / 0.45));
+}
+@keyframes efIdlgRainbow {
+  to { background-position: 200% 0; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .ef-idlg__group-items li[data-level="max"] { animation: none; }
+}
+@media (max-width: 720px) {
+  .ef-idlg__group { grid-template-columns: 72px minmax(0, 1fr); gap: 10px; }
+  .ef-idlg__group-items { grid-template-columns: repeat(auto-fill, minmax(104px, 1fr)); }
+}
 @media (max-width: 720px) {
   .ef-idlg__media img { max-height: 150px; }
   .ef-idlg__row:has(.ef-idlg__jump) { grid-template-columns: 1fr auto auto; }

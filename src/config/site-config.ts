@@ -26,6 +26,8 @@ export interface SiteConfig {
   ogImageHeight: number;
   /** 浏览器移动端地址栏主题色 */
   themeColor: string;
+  /** 站点起始日期（本地日期 YYYY-MM-DD）：玩家卡片大数字与档案面板的站点运行/周年进度都从这里计算 */
+  startDate: string;
 }
 
 export const SITE_CONFIG: SiteConfig = {
@@ -41,4 +43,5 @@ export const SITE_CONFIG: SiteConfig = {
   ogImageWidth: 1200,
   ogImageHeight: 675,
   themeColor: "#101214",
+  startDate: "2026-10-24",
 };

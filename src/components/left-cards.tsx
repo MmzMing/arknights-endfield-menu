@@ -16,9 +16,10 @@ export interface CardSpec {
   action: string;
   label: string;
   art: string;
-  /** 光学微调（px）：labelDx 平移整行文字，iconDx 平移 si-* 图标盒；实测 text.x 数组保持不动 */
+  /** 光学微调（px）：labelDx 平移整行文字，iconDx / iconDy 平移 si-* 图标盒；实测 text.x 数组保持不动 */
   labelDx?: number;
   iconDx?: number;
+  iconDy?: number;
   noted?: boolean;
   sheen?: boolean;
   text: LabelLayout;
@@ -117,7 +118,7 @@ function CardMarkup({ card, i, onAction }: { card: CardSpec; i: number; onAction
     const inkY = card.text.y.length > 1 ? (card.text.y[0] + card.text.y[card.text.y.length - 1]) / 2 : card.text.y[0];
     const m = card.text.matrix;
     const cx = m ? m[0] * inkX + m[2] * inkY : inkX;
-    return { x: cx + (card.iconDx ?? 0) - size / 2, y: 30, size };
+    return { x: cx + (card.iconDx ?? 0) - size / 2, y: 30 + (card.iconDy ?? 0), size };
   })();
   const labelDx = card.labelDx ?? 0;
   return (

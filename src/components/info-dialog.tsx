@@ -2,6 +2,7 @@ import { useCallback, useEffect, useLayoutEffect, useRef, useState } from "react
 import { gsap } from "gsap";
 import { createTopoContourPaths } from "../lib/topo-contours";
 import type { DialogContent } from "../config/menu-content";
+import { TechStackIcon } from "./tech-stack-icon";
 import "../styles/info-dialog.css";
 
 const CONTOUR_PATHS = createTopoContourPaths({
@@ -97,6 +98,43 @@ function DialogFace({ content, isStatic }: { content: DialogContent; isStatic: b
             ))}
           </div>
         )}
+        {content.links && content.links.length > 0 && (
+          <div className="ef-idlg__links">
+            {content.links.map((link) => (
+              <a
+                className="ef-idlg__link"
+                key={link.url}
+                href={link.url}
+                target="_blank"
+                rel="noopener noreferrer"
+              >
+                {link.source && <b className="ef-idlg__link-source">【{link.source}】</b>}
+                <span>{link.title}</span>
+                {link.note && <small>{link.note}</small>}
+              </a>
+            ))}
+          </div>
+        )}
+        {content.groups && content.groups.length > 0 && (
+          <div className="ef-idlg__groups">
+            {content.groups.map((group) => (
+              <section className="ef-idlg__group" key={group.label}>
+                <h3 className="ef-idlg__group-label">{group.label}</h3>
+                <ul className="ef-idlg__group-items">
+                  {group.items.map((item) => (
+                    <li key={item.name} data-level={item.level}>
+                      {item.icon && <TechStackIcon name={item.icon} />}
+                      <span className="ef-idlg__group-body">
+                        <span className="ef-idlg__group-name">{item.name}</span>
+                        {item.level && <small>{item.level}</small>}
+                      </span>
+                    </li>
+                  ))}
+                </ul>
+              </section>
+            ))}
+          </div>
+        )}
         <footer className="ef-idlg__hint">
           <span>ESC // CLOSE</span>
           <div className="ef-idlg__chips" aria-hidden="true">
@@ -130,9 +168,9 @@ export function InfoDialog({
   const [bandCount] = useState(() =>
     window.matchMedia("(max-width: 720px)").matches ? 1 : BAND_COUNT,
   );
-  // 站点入口弹窗带封面媒体块：卡片按内容加高（视口封顶），桌面端以 inline style 覆盖固定高度；
-  // 窄屏走 CSS 的内容自适应高度，不加 inline。揭示动画的行高在挂载时实测，随卡片高度自适应。
-  const cardHeight = content.image
+  // 站点入口弹窗带封面媒体块、RSS/友链弹窗带外链列表：卡片按内容加高（视口封顶），桌面端以 inline style
+  // 覆盖固定高度；窄屏走 CSS 的内容自适应高度，不加 inline。揭示动画的行高在挂载时实测，随卡片高度自适应。
+  const cardHeight = content.image || content.links?.length || content.groups?.length
     ? Math.min(780, Math.round((window.innerHeight - 48) / 0.72))
     : 520;
   const panelHeight = Math.round(cardHeight * 0.72);

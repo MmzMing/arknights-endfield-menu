@@ -17,6 +17,7 @@ const SOURCES = [
   { pkg: "@fontsource-variable/noto-sans-sc", css: ["index.css"], family: { from: "Noto Sans SC Variable", to: "Noto Sans SC" } },
   { pkg: "@fontsource/inter", css: ["latin-500.css"] },
   { pkg: "@fontsource/jetbrains-mono", css: ["latin-400.css", "latin-600.css"] },
+  { pkg: "@fontsource/dm-serif-display", css: ["latin-400.css"] },
 ];
 
 const root = new URL("..", import.meta.url).pathname.replace(/^\/([A-Za-z]:)/, "$1");
@@ -73,4 +74,4 @@ writeFileSync(
   header + rules.replaceAll(/__FONT__(.+?\.woff2)/g, "/fonts/$1"),
 );
 
-console.log(`fonts.css: ${files.length} woff2 files, families: Rajdhani / Noto Sans SC / Inter / JetBrains Mono`);
+console.log(`fonts.css: ${files.length} woff2 files, families: Rajdhani / Noto Sans SC / Inter / JetBrains Mono / DM Serif Display`);

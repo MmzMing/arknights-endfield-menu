@@ -1,5 +1,6 @@
 import { cssVars } from "../lib/label-svg";
 import { useMenuActions } from "../menu-actions";
+import { useNetStatus } from "../hooks/use-net-status";
 import "../styles/hud.css";
 
 /* HUD controls: system buttons (top left), power button (bottom left), close button (top right)
@@ -64,13 +65,22 @@ export function CloseButton() {
   );
 }
 
-export function NetInfo({ netDelay, netUid }: { netDelay: string; netUid: string }) {
+export function NetInfo({ netUid }: { netUid: string }) {
+  const status = useNetStatus();
+  const readout =
+    status === null
+      ? "--ms"
+      : status.mode === "latency"
+        ? `${status.latency}ms`
+        : status.fps === null
+          ? "-- FPS"
+          : `${status.fps} FPS`;
   return (
     <div className="ef-netinfo">
       <svg className="ef-icon">
         <use href="#ic-signal" />
       </svg>
-      <span>{netDelay}</span>
+      <span>{readout}</span>
       <span>UID: {netUid}</span>
     </div>
   );

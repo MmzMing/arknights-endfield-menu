@@ -1,10 +1,13 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { MENU_CONTENT, dialogFor } from "./config/menu-content";
+import { MENU_CONTENT, announcementDialog, dialogFor, feedDialog, friendsDialog } from "./config/menu-content";
+import { FRIEND_LINKS } from "./config/friend-links";
+import { TECH_STACK_COUNT, TECH_STACK_LABEL } from "./config/profile-panel-config";
 import { MenuActionsContext } from "./menu-actions";
 import { SceneLayer, SceneProvider, useScene, type SceneApi } from "./scene/scene-context";
 import { SpriteDefs } from "./components/sprite-defs";
 import { SiteIconDefs } from "./components/icon-defs";
 import { BackdropDecor, Wallpaper } from "./components/backdrop";
+import { Countdown } from "./components/countdown";
 import { Disc } from "./components/disc";
 import { TransitionSkeleton } from "./components/transition-skeleton";
 import { DialRings } from "./components/dial-rings";
@@ -14,11 +17,13 @@ import { DiscButtons } from "./components/disc-buttons";
 import { LeftCards, CardLinks } from "./components/left-cards";
 import { RightTiles } from "./components/right-tiles";
 import { TopBar } from "./components/top-bar";
-import { NewsBelt, NewsPanel } from "./components/news-panel";
+import { NewsBelt, NewsPanel, type NewsSlide } from "./components/news-panel";
 import { PlayerBadge } from "./components/player-badge";
+import { ProfilePanel } from "./components/profile-panel";
 import { CloseButton, Hud, NetInfo } from "./components/hud";
 import { InfoDialog } from "./components/info-dialog";
 import { useMenuPhase } from "./hooks/use-menu-phase";
+import { RSS_SNAPSHOT } from "./assets/rss-feed";
 import { useStageScale } from "./hooks/use-stage-scale";
 
 /* App: assembles the menu exactly in the demo's mount order (app.js mountAll) and owns the two pieces of
@@ -37,15 +42,37 @@ function SceneBridge({ onScene }: { onScene: (api: SceneApi) => void }) {
 export default function App() {
   const content = MENU_CONTENT;
   const menu = useMenuPhase();
+  const feeds = RSS_SNAPSHOT;
   const [dialog, setDialog] = useState<string | null>(null);
-  const closeDialog = useCallback(() => setDialog(null), []);
+  const [announcement, setAnnouncement] = useState<NewsSlide | null>(null);
+  const [profileOpen, setProfileOpen] = useState(false);
+  const closeDialog = useCallback(() => {
+    setDialog(null);
+    setAnnouncement(null);
+  }, []);
+  const openAnnouncement = useCallback((slide: NewsSlide) => {
+    setDialog(null);
+    setAnnouncement(slide);
+  }, []);
+  const openProfile = useCallback(() => setProfileOpen(true), []);
+  const closeProfile = useCallback(() => setProfileOpen(false), []);
+  const dialogContent =
+    announcement !== null
+      ? announcementDialog(announcement)
+      : dialog === null
+        ? null
+        : dialog === "rss"
+          ? feedDialog(feeds)
+          : dialog === "friends"
+            ? friendsDialog()
+            : dialogFor(dialog, content);
 
   const stageRef = useRef<HTMLDivElement>(null);
   const wallpaperRef = useRef<HTMLDivElement>(null);
   const sceneRef = useRef<SceneApi | null>(null);
 
   const menuHeld = menu.phase === "exiting" || menu.phase === "closed";
-  const paused = menuHeld || dialog !== null;
+  const paused = menuHeld || dialog !== null || announcement !== null || profileOpen;
 
   useStageScale(stageRef, wallpaperRef, (s) => {
     if (sceneRef.current) sceneRef.current.stageScale.value = s;
@@ -61,23 +88,26 @@ export default function App() {
 
   const actions = useMemo(
     () => ({
-      onAction: (action: string) => setDialog(action),
+      onAction: (action: string) => {
+        setAnnouncement(null);
+        setDialog(action);
+      },
       requestClose: () => menu.close(),
     }),
     [menu],
   );
 
-  // Escape: the dialog owns its exit timeline; otherwise keep the demo's menu toggle.
+  // Escape: the dialog/panel owns its exit timeline; otherwise keep the demo's menu toggle.
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
       if (e.key !== "Escape") return;
-      if (dialog !== null) return;
+      if (dialog !== null || announcement !== null || profileOpen) return;
       if (menu.phase === "entering" || menu.phase === "open") menu.close();
-      else if (menu.phase !== "boot") menu.open();
+      else menu.open();
     };
     document.addEventListener("keydown", onKey);
     return () => document.removeEventListener("keydown", onKey);
-  }, [dialog, menu]);
+  }, [announcement, dialog, menu, profileOpen]);
 
   // clicking the letterbox around the stage closes the menu (the demo's #efMenu self-click)
   const onOverlayClick = useCallback(
@@ -96,6 +126,7 @@ export default function App() {
       <SpriteDefs />
       <SiteIconDefs />
       <Wallpaper ref={wallpaperRef} />
+      <Countdown content={content.countdown} />
       <div className="ef-overlay" id="efMenu" onClick={onOverlayClick}>
         <div className="ef-stage" ref={stageRef} data-paused={paused ? "true" : "false"}>
           <SceneProvider>
@@ -108,7 +139,7 @@ export default function App() {
               <Disc paused={paused} entering={menu.phase === "entering"}>
                 <TransitionSkeleton />
                 <DialRings />
-                <LevelPill label={content.levelPill.label} level={content.levelPill.level} onAction={actions.onAction} />
+                <LevelPill label={TECH_STACK_LABEL} level={String(TECH_STACK_COUNT)} onAction={actions.onAction} />
               </Disc>
             </SceneLayer>
             <SceneLayer name="btns">
@@ -121,18 +152,18 @@ export default function App() {
             </SceneLayer>
             <SceneLayer name="cards">
               <LeftCards cards={content.leftCards} />
-              <PlayerBadge content={content.player} />
+              <PlayerBadge content={content.player} onOpen={openProfile} />
               <Hud />
             </SceneLayer>
             <SceneLayer name="news">
-              <NewsPanel slides={content.news.slides} paused={paused} />
+              <NewsPanel slides={content.news.slides} paused={paused} onOpen={openAnnouncement} />
             </SceneLayer>
             <SceneLayer name="top">
-              <TopBar content={content.topBar} />
+              <TopBar friendCount={FRIEND_LINKS.length} rssCount={feeds.items.length} />
             </SceneLayer>
             <SceneBridge onScene={onScene} />
           </SceneProvider>
-          <NetInfo netDelay={content.net.delay} netUid={content.net.uid} />
+          <NetInfo netUid={content.net.uid} />
         </div>
       </div>
       <button className="ef-closed-hint" id="efClosedHint" onClick={menu.open}>
@@ -141,8 +172,16 @@ export default function App() {
       <div className="ef-post" aria-hidden="true">
         <div className="ef-post__grade" />
       </div>
-      {dialog !== null && (
-        <InfoDialog content={dialogFor(dialog, content)} onClose={closeDialog} />
+      {dialogContent && (
+        <InfoDialog content={dialogContent} onClose={closeDialog} />
+      )}
+      {profileOpen && (
+        <ProfilePanel
+          player={content.player}
+          panel={content.profilePanel}
+          startDate={content.siteStartDate}
+          onClose={closeProfile}
+        />
       )}
     </MenuActionsContext.Provider>
   );

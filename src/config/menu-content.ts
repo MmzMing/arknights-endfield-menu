@@ -1,12 +1,18 @@
 import type { EnergyContent } from "../components/energy-pill";
-import type { TopBarContent } from "../components/top-bar";
 import type { PlayerContent } from "../components/player-badge";
 import type { CardSpec } from "../components/left-cards";
 import type { TileSpec } from "../components/right-tiles";
 import type { NewsSlide } from "../components/news-panel";
+import { ANNOUNCEMENTS } from "./announcement-config";
 import type { LabelLayout } from "../lib/label-svg";
+import { yearDay } from "../lib/calendar-days";
+import type { ProfilePanelContent } from "./profile-panel-config";
 import { PLAYER_CONFIG } from "./player-config";
+import { PROFILE_PANEL_CONFIG, TECH_STACK_COUNT, TECH_STACK_GROUPS } from "./profile-panel-config";
+import { SITE_CONFIG } from "./site-config";
 import { SITE_LINKS } from "./link-config";
+import { FRIEND_LINKS } from "./friend-links";
+import type { FeedSnapshot } from "./feeds";
 
 /* All editable content of the menu in one typed module. Coordinates and timings are NOT content — they are
    measured assets and live inside the components. The per-glyph `text` layouts are measured against the exact
@@ -19,6 +25,28 @@ export interface DialogMetaRow {
   href?: string;
 }
 
+export interface DialogLink {
+  title: string;
+  url: string;
+  /** 右侧附注（RSS 条目为日期，友链为描述） */
+  note?: string;
+  /** 左侧来源标签（RSS 条目显示为【站点名】） */
+  source?: string;
+}
+
+export interface DialogGroupItem {
+  name: string;
+  /** 等级（技术栈的 low/medium/high/xhigh/max/ultra），决定卡片配色并显示在名字右侧 */
+  level?: string;
+  /** 品牌图标键（技术栈用，见 components/tech-stack-icon.tsx） */
+  icon?: string;
+}
+
+export interface DialogGroup {
+  label: string;
+  items: DialogGroupItem[];
+}
+
 export interface DialogContent {
   title: string;
   subtitle: string;
@@ -26,17 +54,34 @@ export interface DialogContent {
   meta: DialogMetaRow[];
   /** 站点入口弹窗扩展：封面图（描述后的媒体块） */
   image?: string;
+  /** 可滚动外链列表（RSS 条目 / 友链），点击新标签页打开 */
+  links?: DialogLink[];
+  /** 分组卡片（技术栈）：每组一行 label + 多列 items 卡片 */
+  groups?: DialogGroup[];
+}
+
+/** 关闭态落地时钟的文案；时间本身读取本地时间，不在这里配置。 */
+export interface CountdownContent {
+  /** 顶部红条标题 */
+  title: string;
+  /** 左下公司标牌 */
+  brand: string;
+  /** 标牌下方来源行 */
+  source: string;
 }
 
 export interface MenuContent {
+  countdown: CountdownContent;
   player: PlayerContent;
-  topBar: TopBarContent;
+  /** 点击左下角玩家卡片打开的档案弹窗内容（技术栈 / 音乐占位 / 面板文案） */
+  profilePanel: ProfilePanelContent;
+  /** 站点起始日期，档案面板据此计算运行天数与周年进度（源头在 site-config.ts） */
+  siteStartDate: string;
   energy: EnergyContent;
-  levelPill: { label: string; level: string };
   news: { slides: NewsSlide[] };
   leftCards: CardSpec[];
   rightTiles: TileSpec[];
-  net: { delay: string; uid: string };
+  net: { uid: string };
   dialogs: Record<string, DialogContent>;
 }
 
@@ -44,51 +89,56 @@ const dialog = (title: string, subtitle: string, description: string, meta: Dial
   title, subtitle, description, meta,
 });
 
-/** 左侧四卡的逐字文案布局，顺序与 SITE_LINKS 一一对应（博客 / memos / 统计 / 工具盒子）。
-    labelDx / iconDx 为用户指定的光学微调（负值左移），补偿图标墨迹重心与文字矩阵渲染偏移。 */
+/** 左侧四卡的逐字文案布局，顺序与 SITE_LINKS 一一对应（博客 / memos / 3D线描房子 / 工具盒子）。
+    labelDx / iconDx / iconDy 为用户指定的光学微调（负值左移/上移），补偿图标墨迹重心与文字矩阵渲染偏移。 */
 const CARD_TEXT: LabelLayout[] = [
   // 博客 ← 原「干员」的实测布局（同为 2 字）
   { size: 22.62, matrix: [1.0392, -0.0417, -0.0168, 1.0015], x: [203.11, 226.39], y: [145.07, 145.3] },
   // memos ← canvas 实测合成的拉丁布局（原「活动」卡的字号/矩阵/中心/斜率，见上方 leftCards 注释）
   { size: 24.07, matrix: [0.9983, -0.0576, -0.0123, 1.0024], x: [198.07, 220.89, 234.58, 257.4, 272.25], y: [148.37, 148.91, 149.24, 149.78, 150.13] },
-  // 统计 ← 原「寻访」的实测布局（同为 2 字）
-  { size: 24.2, matrix: [1.0678, -0.0186, 0.0015, 1.0001], x: [202.57, 224.93], y: [147.04, 146.12] },
+  // 3D线描房子 ← 沿用原「寻访」卡的字号/矩阵/墨迹中心(224.93, 146.58)与斜率；逐字 advance 由 canvas 实测
+  //   （Noto Sans SC 550 @ 24.2px：3 13.91、D 17.01、线/描/房/子 24.2，合计 127.73），整串居中于原中心
+  { size: 24.2, matrix: [1.0678, -0.0186, 0.0015, 1.0001], x: [161.07, 174.98, 191.99, 216.19, 240.39, 264.59], y: [149.21, 148.64, 147.94, 146.94, 145.94, 144.95] },
   // 工具盒子 ← 原「采购中心」的实测布局（同为 4 字）
   { size: 24.52, matrix: [0.9796, -0.0274, -0.0261, 1.0011], x: [193.01, 218.59, 243.56, 268.83], y: [132.78, 132.55, 133.08, 132.58] },
 ];
 
-/** 与 CARD_TEXT 对齐的每卡光学微调（px）：labelDx 平移文字，iconDx 在矩阵对齐基础上补偿图标墨迹重心
-    与用户目测偏好（博客图标持续偏左 → 累计 +18；工具盒子标签按用户指向 +6）。 */
-const CARD_NUDGE: Pick<CardSpec, "labelDx" | "iconDx">[] = [
+/** 与 CARD_TEXT 对齐的每卡光学微调（px）：labelDx 平移文字，iconDx / iconDy 在矩阵对齐基础上补偿图标墨迹
+    重心与用户目测偏好（博客图标持续偏左 → 累计 +18；工具盒子标签按用户指向 +6；3D线描房子图标按用户指向左下）。 */
+const CARD_NUDGE: Pick<CardSpec, "labelDx" | "iconDx" | "iconDy">[] = [
   { labelDx: -6, iconDx: 21 },
   {},
-  {},
+  { iconDx: -6, iconDy: 7 },
   { labelDx: 15, iconDx: -15 },
 ];
 
+/** 顶部胶囊 + 号打开的年度总结：数值按当天算（与胶囊读数同一函数 yearDay），内容即本站唯一的年总结文案。 */
+const TODAY = new Date();
+const YEAR_DAY = yearDay(TODAY);
+const YEAR_SUMMARY: DialogContent = dialog("YEAR SUMMARY", "年总结", "本年已过去的天数、剩余天数与全年天数一览。", [
+  { label: "年份", value: String(TODAY.getFullYear()) },
+  { label: "已过", value: `${YEAR_DAY.elapsed} 天` },
+  { label: "剩余", value: `${YEAR_DAY.total - YEAR_DAY.elapsed} 天` },
+  { label: "全年", value: `${YEAR_DAY.total} 天` },
+  { label: "进度", value: `${((YEAR_DAY.elapsed / YEAR_DAY.total) * 100).toFixed(1)}%` },
+]);
+
 export const MENU_CONTENT: MenuContent = {
+  countdown: {
+    title: "COUNTDOWN",
+    brand: "ENDFIELD INDUSTRIES",
+    source: "FROM TALOS-II",
+  },
   player: PLAYER_CONFIG,
-  topBar: {
-    currencyA: "355",
-    currencyB: "123040",
-    stamina: "178/360",
-  },
+  profilePanel: PROFILE_PANEL_CONFIG,
+  siteStartDate: SITE_CONFIG.startDate,
   energy: { current: "7200", max: "9800", percent: "100" },
-  levelPill: { label: "探索等级", level: "07" },
-  news: {
-    slides: [
-      { caption: "版本前瞻 // 敬请期待", c1: "#7e3d49", c2: "#23191f" },
-      { caption: "限时活动 · 进行中", c1: "#3d4f63", c2: "#161c24" },
-      { caption: "新功能上线预告", c1: "#4f5a3d", c2: "#1a2016" },
-      { caption: "系统维护预告 · 02:00", c1: "#5a4a2f", c2: "#221c12" },
-      { caption: "终末地补给 · 限时供应", c1: "#5c5420", c2: "#1d1a0b" },
-    ],
-  },
+  news: { slides: ANNOUNCEMENTS },
   /* 左侧四张卡 = 四个兄弟站点入口：标题/地址/图标来自 SITE_LINKS，点击走弹窗展示介绍/地址/封面图。
-     text 是逐字符 origin 的实测资产：「博客/统计/工具盒子」逐字复用原同字数文案（干员/寻访/采购中心）的
-     实测布局；「memos」为拉丁串，逐字 advance 由 canvas 实测（Noto Sans SC 550 @ 24.07px：m 22.82、
-     e 13.70、o 14.85、s 11.63），ink 中心对齐原「活动」卡的实测中心 240.97，y 沿其 0.0237/px 的实测斜率
-     线性延伸。 */
+     text 是逐字符 origin 的实测资产：「博客/工具盒子」逐字复用原同字数文案（干员/采购中心）的实测布局；
+     「memos」「3D线描房子」为 canvas 实测合成的布局——各自沿用原卡（活动/寻访）的字号、矩阵、墨迹中心与
+     斜率，逐字 advance 由 canvas 实测（memos：Noto Sans SC 550 @ 24.07px，m 22.82、e 13.70、o 14.85、
+     s 11.63；3D线描房子：@ 24.2px，3 13.91、D 17.01、线/描/房/子 24.2），整串居中于原卡的实测中心。 */
   leftCards: SITE_LINKS.map((link, i): CardSpec => ({
     action: link.id,
     label: link.title,
@@ -134,7 +184,7 @@ export const MENU_CONTENT: MenuContent = {
     { id: "tools", label: "游戏工具", art: "art-tile-tools",
       text: { size: 22.26, matrix: [1.01, -0.0071, -0.003, 1], x: [8.58, 30.87, 53.3, 75.65], y: [91.25, 91.28, 91.55, 91.65] } },
   ],
-  net: { delay: "82ms", uid: "114514" },
+  net: { uid: "114514" },
   dialogs: {
     /* 四个站点入口的弹窗从 SITE_LINKS 生成：标题 = 站点 id 大写，地址作为 meta 行并带跳转按钮。 */
     ...Object.fromEntries(
@@ -161,23 +211,59 @@ export const MENU_CONTENT: MenuContent = {
     alerts: dialog("ALERTS", "警报", "塔卫区域的异常事件警报。", [
       { label: "级别", value: "关注" },
     ]),
-    news: dialog("BREAKING NEWS", "公告", "最新的运营公告与版本情报。", [
-      { label: "来源", value: "官方" },
-    ]),
-    stamina: dialog("STAMINA", "理智", "行动所消耗的理智值，随时间自然恢复。", [
-      { label: "上限", value: "360" },
-    ]),
-    "topup-a": dialog("TOP UP", "补充", "获取更多货币的途径。", [
-      { label: "余额", value: "355" },
-    ]),
-    "topup-b": dialog("TOP UP", "补充", "获取更多货币的途径。", [
-      { label: "余额", value: "123040" },
-    ]),
-    "level-info": dialog("EXPLORATION", "探索等级", "提升探索等级以解锁更多区域与功能。", [
-      { label: "等级", value: "07" },
-    ]),
+    year: YEAR_SUMMARY,
+    "tech-stack": {
+      title: "TECH STACK",
+      subtitle: "技术栈",
+      description: `当前在用的技术栈，按类别共 ${TECH_STACK_COUNT} 项。`,
+      meta: [],
+      groups: TECH_STACK_GROUPS.map((group) => ({
+        label: group.label,
+        items: group.items.map((item) => ({ name: item.name, level: item.level, icon: item.icon })),
+      })),
+    },
   },
 };
+
+/** 友链弹窗：条目来自 FRIEND_LINKS（顶栏计数同源）。 */
+export function friendsDialog(): DialogContent {
+  return {
+    title: "FRIEND LINKS",
+    subtitle: "友链",
+    description:
+      FRIEND_LINKS.length > 0
+        ? "常去的站点与朋友们的博客。"
+        : "尚未收录友链；在 src/config/friend-links.ts 中添加后这里会自动列出。",
+    meta: [],
+    links: FRIEND_LINKS.map((link) => ({ title: link.name, url: link.url, note: link.description })),
+  };
+}
+
+/** RSS 弹窗：条目来自构建期聚合快照（本站 + 全部友链的 RSS，pnpm feeds:update 刷新）。 */
+export function feedDialog(feed: FeedSnapshot): DialogContent {
+  return {
+    title: "RSS FEED",
+    subtitle: "订阅更新",
+    description: `来自 ${feed.sites} 个站点的最新 ${feed.items.length} 篇更新，点击标题打开原文。`,
+    meta: [],
+    links: feed.items.map((item) => ({
+      title: item.title,
+      url: item.url,
+      note: item.date,
+      source: item.source,
+    })),
+  };
+}
+
+/** 公告弹窗：标题固定为栏目名，副标题 / 正文 / 跳转链接来自当前这条公告的配置。 */
+export function announcementDialog(slide: NewsSlide): DialogContent {
+  return {
+    title: "BREAKING NEWS",
+    subtitle: slide.title,
+    description: slide.detail,
+    meta: slide.link ? [{ label: slide.link.label, value: slide.link.value, href: slide.link.href }] : [],
+  };
+}
 
 /** Every actionable id that should open a dialog (cards, tiles, disc buttons, HUD and readouts).
     Missing entries fall back to a generic panel. */

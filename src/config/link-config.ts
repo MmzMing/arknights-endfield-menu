@@ -2,7 +2,7 @@
    image 为部署根路径，对应 public/assets/images/ 下的封面图文件；icon 指向 si-* 图标包
    （src/components/icon-defs.tsx 按 SiteIconName 渲染同名 symbol）。 */
 
-export type SiteIconName = "blog" | "memo" | "status" | "tool";
+export type SiteIconName = "blog" | "home" | "memo" | "status" | "tool";
 
 export interface SiteLink {
   /** 稳定 id，供代码引用（路由/高亮/埋点） */
@@ -42,14 +42,14 @@ export const SITE_LINKS: SiteLink[] = [
     icon: "memo",
   },
   {
-    id: "analytics",
-    title: "统计",
-    image: "/assets/images/links/stats.webp",
-    url: "https://stats.mmzhiku.xyz/share/uAfsjwbIKgVPjxtc",
-    description: "查看网站访问统计数据。",
-    tags: ["统计", "数据"],
-    ctaLabel: "查看统计",
-    icon: "status",
+    id: "home",
+    title: "3D线描房子",
+    image: "/assets/images/links/home.webp",
+    url: "https://home.mmzhiku.xyz",
+    description: "3D 线描风格的个人主页。",
+    tags: ["主页", "3D"],
+    ctaLabel: "进入主页",
+    icon: "home",
   },
   {
     id: "toolbox",

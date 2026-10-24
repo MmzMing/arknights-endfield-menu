@@ -3,11 +3,12 @@ import { LAYERS, PARTS } from "../scene/scene-constants";
 import { useScene } from "../scene/scene-context";
 import "../styles/level-pill.css";
 
-/* Exploration level pill. It rides on the lower-left of the disc rim, inside the disc cylinder.
+/* Tech-stack pill. It rides on the lower-left of the disc rim, inside the disc cylinder.
    Everything is laid out in the pill's own px, measured on the reference screenshot: one translucent capsule
    carrying the yellow tab, the radar (the game's artwork, button-art), the label, a band of dim stripes under
-   the level number and the round "i" button at the right end. The game draws the pill slightly askew on the disc
-   rim; the face's lean matrix reproduces that. Migrated verbatim from level-pill.js. */
+   the number and the round "i" button at the right end. The game draws the pill slightly askew on the disc
+   rim; the face's lean matrix reproduces that. Migrated verbatim from level-pill.js; the readout now carries the
+   tech-stack count and the "i" opens the tech-stack summary. */
 
 export function LevelPill({
   label,
@@ -38,11 +39,11 @@ export function LevelPill({
         <b>{level}</b>
         <button
           className="ef-lvl__info"
-          data-action="level-info"
+          data-action="tech-stack"
           title="说明"
           aria-label="说明"
           data-ef-shadow=""
-          onClick={() => onAction("level-info")}
+          onClick={() => onAction("tech-stack")}
         />
       </div>
     </div>

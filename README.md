@@ -31,21 +31,12 @@ pnpm lint         # oxlint
 ## 测试（手搓，无测试框架）
 
 项目规范：**不使用 Playwright / Vitest 等测试框架**。测试代码统一在 `src/test/`（镜像源码目录），
-全部为纯 Node 脚本（`node:assert` / `node:http` / `node:zlib` / 全局 `WebSocket`，零额外依赖）。
+全部为纯 Node 脚本（`node:assert`，零额外依赖）。
 
 ```bash
 pnpm check:libs    # src/test/lib/check-libs.mjs —— 几何/随机纯函数的黄金值校验
                    #   （arcD 圆弧 / mulberry32 种子流 / shapePathD 卡片轮廓）
-
-pnpm build && pnpm check:frames
-                   # src/test/frame/frame-check.mjs —— 手搓 CDP 客户端驱动无头 Chromium 的
-                   #   视觉回归：冻结全部 CSS 动画于统一时间轴，逐帧截图像素比对
-                   #   （开场 17 帧 / 关闭 12 帧 / 静止 / 相机偏移，共 31 帧；
-                   #     PNG 解码与像素 diff 均为本仓手写实现）
-                   #   容差：单通道 Δ2、差异像素 ≤0.5%
 ```
-
-当前结果：**31/31 帧通过**（绝大多数帧 0.000%，即最大单通道差 ≤2/255）。
 
 ## 目录结构
 
@@ -58,7 +49,7 @@ src/
   hooks/        菜单相位编排、舞台缩放
   config/       menu-content.ts —— 全部可编辑内容
   assets/       描摹美术数据与字体文件（脚本生成，勿手改）
-  test/         手搓测试（镜像源码：lib/ 纯函数校验、frame/ 视觉回归）
+  test/         手搓测试（镜像源码目录：lib/ 纯函数校验）
 scripts/        资产生成（extract-assets / build-fonts）
 docs/           项目文档
 ```
@@ -67,8 +58,6 @@ docs/           项目文档
 
 - `main.tsx` 有意不使用 StrictMode（double-invoke 会重放开场编排，破坏时序）。
 - Vite dev 在部分机器只监听 `localhost`（IPv6），`127.0.0.1` 连不上属正常。
-- 视觉回归依赖"手工 `getAnimations().pause() + currentTime` 冻结"——
-  任何"截图时禁用动画"的快捷选项都会把动画快进到末帧，导致比对失真。
 
 ## 规范
 

@@ -122,7 +122,7 @@ body.ef-out .ef-overlay { pointer-events: none; }
    decode it and falls to the keyword fallback, Firefox plays the animation. */
 body { cursor: url("/mouse/pointer.cur"), auto; }
 body button, body .ef-card::before, body .ef-news__frame, body .ef-news__bar, body .ef-power,
-body .ef-rtile, body .ef-discbtn {
+body .ef-rtile, body .ef-discbtn, body .ef-prof__music {
   cursor: url("/mouse/link.cur"), pointer;
 }
 body .ef-lvl__info { cursor: url("/mouse/help.cur"), help; }

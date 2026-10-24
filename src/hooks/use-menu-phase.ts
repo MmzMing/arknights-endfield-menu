@@ -1,15 +1,17 @@
 import { useCallback, useEffect, useLayoutEffect, useRef, useState } from "react";
 
-/* Menu phase orchestration, migrated verbatim from the demo's app.js (setClosed / playEntrance).
-   The three body classes drive every entrance/exit keyframe in the CSS (kept on <body> on purpose), so this hook
-   owns the exact sequencing: ef-in for ENTRANCE_MS, ef-out until the backdrop's cut-back reports animationend
-   (with the demo's fallback timer), then ef-closed. Reopening during the exit cancels it. */
+/* Menu phase orchestration, migrated from the demo's app.js (setClosed / playEntrance) with this site's landing
+   state: the page boots closed on the wallpaper and its countdown, and the first entrance only plays when the
+   closed hint (or Escape) opens the menu. The three body classes drive every entrance/exit keyframe in the CSS
+   (kept on <body> on purpose), so this hook owns the exact sequencing: ef-in for ENTRANCE_MS, ef-out until the
+   backdrop's cut-back reports animationend (with the demo's fallback timer), then ef-closed. Reopening during the
+   exit cancels it. */
 
 const ENTRANCE_MS = 900;   // every entrance animation finishes within this (the last, the slide of the cards and tiles, by ~890 ms)
 const EXIT_MS = 500;       // every exit animation finishes within this; the backdrop's cut back to the wallpaper is the last
 const EXIT_FALLBACK_MS = EXIT_MS + 250;   // closes anyway when that cut never reports its end (hidden page, cancelled animation)
 
-export type MenuPhase = "boot" | "entering" | "open" | "exiting" | "closed";
+export type MenuPhase = "entering" | "open" | "exiting" | "closed";
 
 export interface MenuPhaseApi {
   phase: MenuPhase;
@@ -20,7 +22,7 @@ export interface MenuPhaseApi {
 }
 
 export function useMenuPhase(onPhase?: (phase: MenuPhase) => void): MenuPhaseApi {
-  const [phase, setPhase] = useState<MenuPhase>("boot");
+  const [phase, setPhase] = useState<MenuPhase>("closed");
   const entranceTimer = useRef(0);
   const exitTimer = useRef(0);
   const reducedMotion = typeof window.matchMedia === "function" ? window.matchMedia("(prefers-reduced-motion: reduce)") : null;
@@ -89,19 +91,15 @@ export function useMenuPhase(onPhase?: (phase: MenuPhase) => void): MenuPhaseApi
     playEntrance();
   }, [playEntrance, stopExitWait]);
 
-  // the demo's bootstrap: give fonts and layout a moment before the first entrance (fonts.ready, so the first
-  // entrance never paints with fallback glyph metrics)
-  useEffect(() => {
-    let timer = 0;
-    document.fonts.ready.then(() => {
-      timer = window.setTimeout(playEntrance, 80);
-    });
+  // the static page ships with body.ef-closed (so the wallpaper paints before React); this keeps the class in
+  // sync for any other document, and the cleanup releases every timer/listener on unmount
+  useLayoutEffect(() => {
+    document.body.classList.add("ef-closed");
     return () => {
-      clearTimeout(timer);
       clearTimeout(entranceTimer.current);
       stopExitWait();
     };
-  }, [playEntrance, stopExitWait]);
+  }, [stopExitWait]);
 
   useEffect(() => {
     onPhase?.(phase);

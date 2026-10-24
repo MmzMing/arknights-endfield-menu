@@ -1,0 +1,107 @@
+/* Landing clock, traced from the reference strip. The artwork is one SVG owned by countdown.tsx; this file only
+   sizes it against the window and fades it with the menu's closed state. The measured fills are adapted to the
+   paper wallpaper behind them (the reference's white ground), keeping the strip's low-contrast, technical tone. */
+
+.ef-countdown {
+  --ef-cd-serif: "DM Serif Display", "Times New Roman", serif;
+  position: fixed;
+  inset: 0;
+  z-index: 5;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  pointer-events: none;
+  transition: opacity 0.25s ease, visibility 0.25s;
+}
+body:not(.ef-closed) .ef-countdown {
+  opacity: 0;
+  visibility: hidden;
+}
+
+.ef-countdown__art {
+  display: block;
+  width: min(78vw, 1664px, 200vh);
+  height: auto;
+  aspect-ratio: 832 / 249;
+  overflow: visible;
+}
+/* narrow windows: give the strip a little more of the width, the hint sits far below it */
+@media (max-width: 760px) {
+  .ef-countdown__art {
+    width: min(92vw, 200vh);
+  }
+}
+
+.ef-cd__slots rect {
+  fill: #fff;
+  fill-opacity: 0.78;
+  stroke: rgba(16, 18, 20, 0.16);
+  stroke-width: 1;
+}
+
+.ef-cd__ornaments {
+  fill: rgba(16, 18, 20, 0.08);
+}
+
+.ef-cd__bar {
+  fill: #b71a1b;
+}
+
+.ef-cd__bar-label {
+  font-family: var(--ef-cd-serif);
+  font-size: 21px;
+  font-weight: 400;
+  fill: #fff3f1;
+}
+
+.ef-cd__bracket {
+  fill: #b9b9b9;
+}
+
+.ef-cd__digit {
+  font-family: var(--ef-cd-serif);
+  font-size: 138px;
+  font-weight: 400;
+  fill: #2b2b2b;
+  text-anchor: middle;
+}
+
+.ef-cd__clock circle {
+  fill: #2b2b2b;
+}
+
+.ef-cd__brand {
+  font-family: var(--ef-cd-serif);
+  font-size: 16px;
+  font-weight: 400;
+  fill: #ababa5;
+}
+
+.ef-cd__source rect:first-child {
+  fill: none;
+  stroke: rgba(122, 92, 94, 0.55);
+  stroke-width: 1;
+}
+.ef-cd__source rect:nth-child(2) {
+  fill: rgba(122, 92, 94, 0.55);
+}
+.ef-cd__source path {
+  stroke: rgba(16, 18, 20, 0.32);
+  stroke-width: 1.2;
+}
+.ef-cd__source text {
+  font-family: var(--ef-font-mono);
+  font-size: 5.5px;
+  font-weight: 400;
+  fill: rgba(16, 18, 20, 0.34);
+}
+
+.ef-cd__telemetry {
+  color: rgba(16, 18, 20, 0.28);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .ef-countdown {
+    transition: none;
+  }
+}

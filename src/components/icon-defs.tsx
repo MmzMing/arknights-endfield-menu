@@ -13,6 +13,10 @@ const SITE_ICONS: Record<SiteIconName, { viewBox: string; markup: string }> = {
     viewBox: "0 0 512 512",
     markup: `<path d="M0 0h512v512H0z" fill="none" /><path fill="currentColor" d="M172.2 226.8c-14.6-2.9-28.2 8.9-28.2 23.8V301c0 10.2 7.1 18.4 16.7 22c18.2 6.8 31.3 24.4 31.3 45c0 26.5-21.5 48-48 48s-48-21.5-48-48V120c0-13.3-10.7-24-24-24H24c-13.3 0-24 10.7-24 24v248c0 89.5 82.1 160.2 175 140.7c54.4-11.4 98.3-55.4 109.7-109.7c17.4-82.9-37-157.2-112.5-172.2M209 0c-9.2-.5-17 6.8-17 16v31.6c0 8.5 6.6 15.5 15 15.9c129.4 7 233.4 112 240.9 241.5c.5 8.4 7.5 15 15.9 15h32.1c9.2 0 16.5-7.8 16-17C503.4 139.8 372.2 8.6 209 0m.3 96c-9.3-.7-17.3 6.7-17.3 16.1v32.1c0 8.4 6.5 15.3 14.8 15.9c76.8 6.3 138 68.2 144.9 145.2c.8 8.3 7.6 14.7 15.9 14.7h32.2c9.3 0 16.8-8 16.1-17.3c-8.4-110.1-96.5-198.2-206.6-206.7" />`,
   },
+  home: {
+    viewBox: "0 0 24 24",
+    markup: `<path d="M0 0h24v24H0z" fill="none" /><g fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="2"><path d="M21 19v-6.733a4 4 0 0 0-1.245-2.9L13.378 3.31a2 2 0 0 0-2.755 0L4.245 9.367A4 4 0 0 0 3 12.267V19a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2" /><path d="M9 15a2 2 0 0 1 2-2h2a2 2 0 0 1 2 2v6H9z" /></g>`,
+  },
   memo: {
     viewBox: "0 0 12 12",
     markup: `<path d="M0 0h12v12H0z" fill="none" /><path fill="currentColor" d="M0 12h9v-1H1V2h7v1h1V1H0Zm2-2h2V9H2Zm0-2h2V7H2Zm3 2h3V9H7V8H6V7H5ZM2 6h3V5H2Zm6 3h1V8H8ZM6 7h1V6H6ZM2 4h5V3H2Zm7 4h1V7H9ZM7 6h1V5H7Zm3 1h1V5h-1ZM8 5h2V4H8Zm0 0" />`,

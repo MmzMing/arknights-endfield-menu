@@ -114,3 +114,39 @@
 /* The profession line runs past the demo's placeholder width; keep it on one line — it ends inside the
    gap before the permission text instead of wrapping into the level row. */
 .ef-badge__sub { white-space: nowrap; }
+
+/* Backdrop (site config `backdrop`): a new layer above the plate and below every original UI layer
+   (streak z-1, inner z-2, rim z-3), clipped to the plate's rounded corners. The art is scaled with cover
+   and pushed towards its upper band so the avatar-and-text rows stay over the darker part of the picture;
+   the scrims darken the left/bottom for text contrast and let more of the art through on the right. */
+.ef-badge__bg {
+  position: absolute; inset: 0; z-index: 0; border-radius: 20px; overflow: hidden; pointer-events: none;
+}
+.ef-badge__bg img {
+  width: 100%; height: 100%; object-fit: cover; object-position: 55% 18%;
+  opacity: 0.72;
+}
+.ef-badge__bg::after {
+  content: ""; position: absolute; inset: 0;
+  background:
+    linear-gradient(90deg, rgba(13,15,18,0.9) 0%, rgba(13,15,18,0.74) 36%, rgba(13,15,18,0.36) 70%, rgba(13,15,18,0.12) 100%),
+    linear-gradient(0deg, rgba(13,15,18,0.42) 0%, rgba(13,15,18,0) 55%);
+}
+
+/* The whole badge opens the profile panel: a transparent hit layer above every artwork layer, so the
+   visuals stay exactly as migrated. */
+.ef-badge__open {
+  position: absolute; inset: 0; z-index: 4; padding: 0; border: 0; border-radius: 20px;
+  background: transparent; pointer-events: auto;
+}
+.ef-badge__rim { transition: filter 0.15s linear; }
+.ef-badge:has(.ef-badge__open:hover) .ef-badge__rim { filter: brightness(1.22); }
+.ef-badge__open:focus-visible { outline: 2px solid var(--gold); outline-offset: 3px; }
+
+/* Hover: a full gold stroke fades in over the rim, which stays a right-side gradient at rest. */
+.ef-badge::after {
+  content: ""; position: absolute; inset: 0; z-index: 5; border-radius: 20px; pointer-events: none;
+  border: 2px solid var(--gold); box-shadow: 0 0 20px rgba(213, 185, 131, 0.28);
+  opacity: 0; transition: opacity 0.2s linear;
+}
+.ef-badge:has(.ef-badge__open:hover)::after { opacity: 1; }

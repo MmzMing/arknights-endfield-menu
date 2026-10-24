@@ -9,19 +9,23 @@
     "lint": "oxlint",
     "preview": "vite preview",
     "check:libs": "node src/test/lib/check-libs.mjs",
+    "feeds:update": "node scripts/fetch-feeds.mjs",
     "icons:generate": "node scripts/build-pwa-icons.mjs"
   },
   "dependencies": {
     "@fontsource-variable/noto-sans-sc": "^5.3.1",
+    "@fontsource/dm-serif-display": "^5.3.0",
     "@fontsource/inter": "^5.3.0",
     "@fontsource/jetbrains-mono": "^5.3.0",
     "@fontsource/rajdhani": "^5.3.0",
     "gsap": "^3.15.0",
     "react": "^19.3.1",
     "react-dom": "^19.3.1",
+    "react-icons": "5.6.0",
     "three": "^0.186.1"
   },
   "devDependencies": {
+    "@extractus/feed-extractor": "8.0.3",
     "@types/node": "^24.19.2",
     "@types/react": "^19.3.0",
     "@types/react-dom": "^19.3.0",

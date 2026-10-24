@@ -1,19 +1,29 @@
 import { useEffect, useRef, useState } from "react";
-import { useMenuActions } from "../menu-actions";
 import "../styles/news-panel.css";
 
-/* "Breaking News" carousel in the top-right corner. Slides carry a caption over a placeholder gradient;
-   they rotate every 8 s, and clicking the frame or a page bar switches slides. Dragging the panel sideways pulls
-   the neighbour slide in under the pointer and either completes the push or springs back on release.
-   Migrated verbatim from news-panel.js; the push animation stays on the Web Animations API, exactly as the demo
-   drove it. `paused` reproduces the demo's pause()/resume() (the menu holds the carousel while it closes and
-   while the info dialog is open). */
+/* "Breaking News" carousel in the top-right corner. Slides carry a caption over their artwork; they rotate every
+   8 s, the page bars switch slides, and clicking the frame opens the current announcement's detail dialog.
+   Dragging the panel sideways pulls the neighbour slide in under the pointer and either completes the push or
+   springs back on release. Migrated verbatim from news-panel.js except for that detail callback; the push
+   animation stays on the Web Animations API, exactly as the demo drove it. `paused` reproduces the demo's
+   pause()/resume() (the menu holds the carousel while it closes and while the info dialog is open). */
 
 export interface NewsSlide {
   caption: string;
+  /** 公告配图（public 下的站点根路径）；省略时使用默认图 /assets/default.webp */
+  image?: string;
   c1: string;
   c2: string;
+  /** 公告详情弹窗的副标题 */
+  title: string;
+  /** 公告详情弹窗的正文 */
+  detail: string;
+  /** 详情中的跳转链接（可选） */
+  link?: { label: string; value: string; href: string };
 }
+
+const DEFAULT_NEWS_IMAGE = "/assets/default.webp";
+const assetUrl = (path: string) => `${import.meta.env.BASE_URL}${path.replace(/^\//, "")}`;
 
 const PUSH_MS = 170;   // slide change, measured on the game: the new slide pushes the old one out sideways
 const PUSH_EASE = "cubic-bezier(.25,.7,.35,1)";
@@ -36,6 +46,9 @@ type Drag = {
 
 function slideBackground(s: NewsSlide): string {
   return (
+    "linear-gradient(90deg, rgba(8,10,12,0.74) 0%, rgba(8,10,12,0.34) 52%, rgba(8,10,12,0.1) 100%)," +
+    "linear-gradient(0deg, rgba(8,10,12,0.5) 0%, rgba(8,10,12,0) 60%)," +
+    `url("${assetUrl(s.image ?? DEFAULT_NEWS_IMAGE)}") center / cover no-repeat,` +
     "repeating-radial-gradient(circle at 30% 40%, rgba(255,255,255,0.06) 0 1px, rgba(255,255,255,0) 1px 4px)," +
     "repeating-linear-gradient(45deg, rgba(255,255,255,0.05) 0 6px, rgba(255,255,255,0) 6px 12px)," +
     `linear-gradient(115deg,${s.c1} 0%,${s.c2} 72%)`
@@ -52,8 +65,15 @@ function makeSlide(slide: NewsSlide): HTMLDivElement {
   return el;
 }
 
-export function NewsPanel({ slides, paused }: { slides: NewsSlide[]; paused: boolean }) {
-  const { onAction } = useMenuActions();
+export function NewsPanel({
+  slides,
+  paused,
+  onOpen,
+}: {
+  slides: NewsSlide[];
+  paused: boolean;
+  onOpen: (slide: NewsSlide) => void;
+}) {
   const bodyRef = useRef<HTMLDivElement>(null);
   const imgRef = useRef<HTMLDivElement | null>(null);   // the slide currently shown
   const [index, setIndex] = useState(0);
@@ -220,9 +240,8 @@ export function NewsPanel({ slides, paused }: { slides: NewsSlide[]; paused: boo
         data-action="news"
         data-ef-shadow=""
         onClick={() => {
-          if (draggedRef.current) return;   // a drag must not also advance the slide and open the dialog
-          goTo(index + 1);
-          onAction("news");
+          if (draggedRef.current) return;   // a drag must not also open the dialog
+          onOpen(slides[index]);
         }}
       >
         <div className="ef-news__head">

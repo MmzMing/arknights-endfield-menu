@@ -1064,3 +1064,12 @@
   src: url(../assets/fonts/jetbrains-mono-latin-600-normal.woff2) format('woff2');
 }
 
+/* dm-serif-display-latin-400-normal */
+@font-face {
+  font-family: 'DM Serif Display';
+  font-style: normal;
+  font-display: swap;
+  font-weight: 400;
+  src: url(../assets/fonts/dm-serif-display-latin-400-normal.woff2) format('woff2');
+}
+
