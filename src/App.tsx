@@ -1,122 +1,155 @@
-import { useState } from 'react'
-import heroImg from './assets/hero.png'
-import reactLogo from './assets/react.svg'
-import viteLogo from './assets/vite.svg'
-import './App.css'
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { MENU_CONTENT, dialogFor } from "./config/menu-content";
+import { MenuActionsContext } from "./menu-actions";
+import { SceneLayer, SceneProvider, useScene, type SceneApi } from "./scene/scene-context";
+import { SpriteDefs } from "./components/sprite-defs";
+import { BackdropDecor, Wallpaper } from "./components/backdrop";
+import { Disc } from "./components/disc";
+import { TransitionSkeleton } from "./components/transition-skeleton";
+import { DialRings } from "./components/dial-rings";
+import { LevelPill } from "./components/level-pill";
+import { EnergyPill } from "./components/energy-pill";
+import { DiscButtons } from "./components/disc-buttons";
+import { LeftCards, CardLinks } from "./components/left-cards";
+import { RightTiles } from "./components/right-tiles";
+import { TopBar } from "./components/top-bar";
+import { NewsBelt, NewsPanel } from "./components/news-panel";
+import { PlayerBadge } from "./components/player-badge";
+import { CloseButton, Hud, NetInfo } from "./components/hud";
+import { InfoDialog, type DialogArt } from "./components/info-dialog";
+import { useMenuPhase } from "./hooks/use-menu-phase";
+import { useStageScale } from "./hooks/use-stage-scale";
 
-function App() {
-  const [count, setCount] = useState(0)
+/* App: assembles the menu exactly in the demo's mount order (app.js mountAll) and owns the two pieces of
+   app-level state — the menu phase (body classes) and the open dialog. Everything inside the scene layers
+   mounts through portals in tree order, which reproduces that order inside each layer. */
 
-  return (
-    <>
-      <section id="center">
-        <div className="hero">
-          <img src={heroImg} className="base" width="170" height="179" alt="" />
-          <img src={reactLogo} className="framework" alt="React logo" />
-          <img src={viteLogo} className="vite" alt="Vite logo" />
-        </div>
-        <div>
-          <h1>Get started</h1>
-          <p>
-            Edit <code>src/App.tsx</code> and save to test <code>HMR</code>
-          </p>
-        </div>
-        <button
-          type="button"
-          className="counter"
-          onClick={() => setCount((count) => count + 1)}
-        >
-          Count is {count}
-        </button>
-      </section>
-
-      <div className="ticks"></div>
-
-      <section id="next-steps">
-        <div id="docs">
-          <svg className="icon" role="presentation" aria-hidden="true">
-            <use href="/icons.svg#documentation-icon"></use>
-          </svg>
-          <h2>Documentation</h2>
-          <p>Your questions, answered</p>
-          <ul>
-            <li>
-              <a href="https://vite.dev/" target="_blank">
-                <img className="logo" src={viteLogo} alt="" />
-                Explore Vite
-              </a>
-            </li>
-            <li>
-              <a href="https://react.dev/" target="_blank">
-                <img className="button-icon" src={reactLogo} alt="" />
-                Learn more
-              </a>
-            </li>
-          </ul>
-        </div>
-        <div id="social">
-          <svg className="icon" role="presentation" aria-hidden="true">
-            <use href="/icons.svg#social-icon"></use>
-          </svg>
-          <h2>Connect with us</h2>
-          <p>Join the Vite community</p>
-          <ul>
-            <li>
-              <a href="https://github.com/vitejs/vite" target="_blank">
-                <svg
-                  className="button-icon"
-                  role="presentation"
-                  aria-hidden="true"
-                >
-                  <use href="/icons.svg#github-icon"></use>
-                </svg>
-                GitHub
-              </a>
-            </li>
-            <li>
-              <a href="https://chat.vite.dev/" target="_blank">
-                <svg
-                  className="button-icon"
-                  role="presentation"
-                  aria-hidden="true"
-                >
-                  <use href="/icons.svg#discord-icon"></use>
-                </svg>
-                Discord
-              </a>
-            </li>
-            <li>
-              <a href="https://x.com/vite_js" target="_blank">
-                <svg
-                  className="button-icon"
-                  role="presentation"
-                  aria-hidden="true"
-                >
-                  <use href="/icons.svg#x-icon"></use>
-                </svg>
-                X.com
-              </a>
-            </li>
-            <li>
-              <a href="https://bsky.app/profile/vite.dev" target="_blank">
-                <svg
-                  className="button-icon"
-                  role="presentation"
-                  aria-hidden="true"
-                >
-                  <use href="/icons.svg#bluesky-icon"></use>
-                </svg>
-                Bluesky
-              </a>
-            </li>
-          </ul>
-        </div>
-      </section>
-
-      <div className="ticks"></div>
-      <section id="spacer"></section>
-    </>
-  )
+/** Hands the scene's imperative api (pause/resume/stageScale) out of the tree. */
+function SceneBridge({ onScene }: { onScene: (api: SceneApi) => void }) {
+  const scene = useScene();
+  const ref = useRef(onScene);
+  ref.current = onScene;
+  useEffect(() => {
+    ref.current(scene);
+  }, [scene]);
+  return null;
 }
 
-export default App
+/** The traced artwork of the entry a dialog was opened for, when it has one (tiles redraw cleanly at any size;
+    cards and disc buttons draw in stage coordinates, so those fall back to the emblem). */
+function dialogArtFor(action: string): DialogArt | undefined {
+  const tile = MENU_CONTENT.rightTiles.find((t) => t.id === action);
+  if (tile) return { href: `#${tile.art}`, viewBox: "0 0 107 104" };
+  return undefined;
+}
+
+export default function App() {
+  const content = MENU_CONTENT;
+  const menu = useMenuPhase();
+  const [dialog, setDialog] = useState<string | null>(null);
+
+  const stageRef = useRef<HTMLDivElement>(null);
+  const wallpaperRef = useRef<HTMLDivElement>(null);
+  const sceneRef = useRef<SceneApi | null>(null);
+
+  const menuHeld = menu.phase === "exiting" || menu.phase === "closed";
+  const paused = menuHeld || dialog !== null;
+
+  useStageScale(stageRef, wallpaperRef, (s) => {
+    if (sceneRef.current) sceneRef.current.stageScale.value = s;
+  });
+
+  // the demo pauses the camera and the carousel while the menu closes; the dialog holds them the same way
+  useEffect(() => {
+    const scene = sceneRef.current;
+    if (!scene) return;
+    if (paused) scene.pause();
+    else scene.resume();
+  }, [paused]);
+
+  const actions = useMemo(
+    () => ({
+      onAction: (action: string) => setDialog(action),
+      requestClose: () => menu.close(),
+    }),
+    [menu],
+  );
+
+  // Escape: the dialog first, then the demo's toggle (close while open; reopen while closed or exiting)
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key !== "Escape") return;
+      if (dialog !== null) {
+        setDialog(null);
+        return;
+      }
+      if (menu.phase === "entering" || menu.phase === "open") menu.close();
+      else if (menu.phase !== "boot") menu.open();
+    };
+    document.addEventListener("keydown", onKey);
+    return () => document.removeEventListener("keydown", onKey);
+  }, [dialog, menu]);
+
+  // clicking the letterbox around the stage closes the menu (the demo's #efMenu self-click)
+  const onOverlayClick = useCallback(
+    (e: React.MouseEvent<HTMLDivElement>) => {
+      if (e.target === e.currentTarget) menu.close();
+    },
+    [menu],
+  );
+
+  return (
+    <MenuActionsContext.Provider value={actions}>
+      <SpriteDefs />
+      <Wallpaper ref={wallpaperRef} />
+      <div className="ef-overlay" id="efMenu" onClick={onOverlayClick}>
+        <div className="ef-stage" ref={stageRef}>
+          <SceneProvider>
+            <BackdropDecor />
+            <SceneLayer name="deck">
+              <CardLinks />
+              <NewsBelt />
+            </SceneLayer>
+            <SceneLayer name="core">
+              <Disc>
+                <TransitionSkeleton />
+                <DialRings />
+                <LevelPill label={content.levelPill.label} level={content.levelPill.level} onAction={actions.onAction} />
+              </Disc>
+            </SceneLayer>
+            <SceneLayer name="btns">
+              <EnergyPill content={content.energy} />
+              <DiscButtons />
+            </SceneLayer>
+            <SceneLayer name="tiles">
+              <RightTiles tiles={content.rightTiles} />
+              <CloseButton />
+            </SceneLayer>
+            <SceneLayer name="cards">
+              <LeftCards cards={content.leftCards} />
+              <PlayerBadge content={content.player} />
+              <Hud />
+            </SceneLayer>
+            <SceneLayer name="news">
+              <NewsPanel slides={content.news.slides} paused={paused} />
+            </SceneLayer>
+            <SceneLayer name="top">
+              <TopBar content={content.topBar} />
+            </SceneLayer>
+            <SceneBridge onScene={(api) => { sceneRef.current = api; }} />
+          </SceneProvider>
+          <NetInfo netDelay={content.net.delay} netUid={content.net.uid} />
+        </div>
+      </div>
+      <button className="ef-closed-hint" id="efClosedHint" onClick={menu.open}>
+        MENU CLOSED · 点击重新打开
+      </button>
+      <div className="ef-post" aria-hidden="true">
+        <div className="ef-post__grade" />
+      </div>
+      {dialog !== null && (
+        <InfoDialog content={dialogFor(dialog, content)} art={dialogArtFor(dialog)} onClose={() => setDialog(null)} />
+      )}
+    </MenuActionsContext.Provider>
+  );
+}

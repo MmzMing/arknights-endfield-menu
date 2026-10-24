@@ -1,0 +1,68 @@
+/* Backdrop styles, migrated verbatim from the demo's backdrop.js. */
+
+.ef-decor, .ef-decor__item { position: absolute; left: 0; top: 0; pointer-events: none; transform-origin: 0 0; transform-style: preserve-3d; }
+.ef-decor { width: 1920px; height: 1080px; }
+.ef-decor__item { width: 0; height: 0; }
+.ef-decor__art { position: absolute; overflow: visible; }
+
+/* Open and close: the floor and the yellow ring ride in with the disc's outer ring, the "+" marks gather in (times in
+   this page's timeline, see index.css). The items and their container are preserve-3d, where opacity would flatten
+   the marks: an item only moves by its own translate and scale, about the disc centre (960, 540, 0), so
+   translate = (1 - s) x centre; opacity, stroke opacity and an item's own squash go on the flat svg or paths inside.
+   - The floor (first item) and the yellow ring (second): from 255 ms they spread from the disc rim out to their places
+     (the scale is the game's ring-to-rim ratio, normalised to these arcs). The arcs' stroke opacity flashes up to 2.4
+     times its resting value (a bright thin ring at 295 ms) and falls back to each path's own stroke-opacity (the last
+     keyframe is left out). The yellow ring shows at 255-270 ms squashed to 0.58 x 0.30 and unfolds as the disc tilts
+     up. On exit, at 150-300 ms, both shrink with the disc and fade, and the ring squashes again.
+   - The "+" marks (third item on): fade in at 310-350 ms, starting 6% closer to the disc centre and easing back to
+     their places by 400 ms. On exit, at 50-290 ms, they implode towards the centre faster and faster; their svg grows
+     back against the item's scale to keep the glyph's size and fades out after 200 ms.
+   The rules name the svgs and the floor's paths by class: a bare "svg" or "path" would make every body.ef-in and
+   body.ef-out toggle restyle every svg or path of the page. */
+@media (prefers-reduced-motion: no-preference) {
+  body.ef-in .ef-decor__item:nth-child(-n+2) { animation: efDecorRideIn 295ms 255ms linear both; }
+  body.ef-in .ef-decor__stroke { animation: efDecorFlash 195ms 255ms linear both; }
+  body.ef-in .ef-decor__item:nth-child(2) > .ef-decor__art { animation: efDecorRingIn 195ms 255ms linear both; }
+  body.ef-in .ef-decor__item:nth-child(n+3) { animation: efDecorMarkIn 90ms 310ms cubic-bezier(.333,0,.667,1) both; }
+  body.ef-in .ef-decor__item:nth-child(n+3) > .ef-decor__art { animation: efFade 40ms 310ms cubic-bezier(.333,0,.667,1) both; }
+  body.ef-out .ef-decor__item:nth-child(-n+2) { animation: efDecorRideOut 150ms 150ms linear both; }
+  body.ef-out .ef-decor__item:first-child > .ef-decor__art { animation: efDecorFadeOut 150ms 150ms linear both; }
+  body.ef-out .ef-decor__item:nth-child(2) > .ef-decor__art { animation: efDecorRingOut 150ms 150ms linear both; }
+  body.ef-out .ef-decor__item:nth-child(n+3) { animation: efDecorMarkImplode 240ms 50ms linear both; }
+  body.ef-out .ef-decor__item:nth-child(n+3) > .ef-decor__art { animation: efDecorMarkOut 240ms 50ms linear both; }
+}
+@keyframes efDecorRideIn {
+  0% { translate: 355.2px 199.8px 0px; scale: 0.63 0.63 0.63; }
+  13.56% { translate: 278.4px 156.6px 0px; scale: 0.71 0.71 0.71; }
+  22.03% { translate: 206.4px 116.1px 0px; scale: 0.785 0.785 0.785; }
+  32.2% { translate: 124.8px 70.2px 0px; scale: 0.87 0.87 0.87; }
+  38.98% { translate: 91.2px 51.3px 0px; scale: 0.905 0.905 0.905; }
+  49.15% { translate: 57.6px 32.4px 0px; scale: 0.94 0.94 0.94; }
+  55.93% { translate: 40.32px 22.68px 0px; scale: 0.958 0.958 0.958; }
+  66.1% { translate: 23.04px 12.96px 0px; scale: 0.976 0.976 0.976; }
+  83.05% { translate: 7.68px 4.32px 0px; scale: 0.992 0.992 0.992; }
+  100% { translate: 0px 0px 0px; scale: 1 1 1; }
+}
+/* no last keyframe: each path ends on its own stroke-opacity */
+@keyframes efDecorFlash { 0% { stroke-opacity: 0; } 7.69% { stroke-opacity: 0.106; } 20.51% { stroke-opacity: 0.336; } 23.08% { stroke-opacity: 0.333; } 33.33% { stroke-opacity: 0.29; } 48.72% { stroke-opacity: 0.203; } 58.97% { stroke-opacity: 0.175; } 74.36% { stroke-opacity: 0.154; } 84.62% { stroke-opacity: 0.146; } }
+@keyframes efDecorRingIn { 0% { opacity: 0; scale: 0.58 0.3; } 8.56% { opacity: 1; } 23.08% { scale: 0.65 0.4; } 48.72% { scale: 0.75 0.62; } 74.36% { scale: 0.93 0.86; } 100% { opacity: 1; scale: 1 1; } }
+@keyframes efDecorMarkIn { 0%, 44.44% { translate: 57.6px 32.4px 0px; scale: 0.94 0.94 0.94; } 100% { translate: 0px 0px 0px; scale: 1 1 1; } }
+@keyframes efDecorRideOut {
+  0% { translate: 0px 0px 0px; scale: 1 1 1; }
+  16.67% { translate: 67.2px 37.8px 0px; scale: 0.93 0.93 0.93; }
+  33.33% { translate: 163.2px 91.8px 0px; scale: 0.83 0.83 0.83; }
+  66.67% { translate: 249.6px 140.4px 0px; scale: 0.74 0.74 0.74; }
+  100% { translate: 384px 216px 0px; scale: 0.6 0.6 0.6; }
+}
+@keyframes efDecorFadeOut { 0% { opacity: 1; } 33.33% { opacity: 0.85; } 66.67% { opacity: 0.55; } 80% { opacity: 0.3; } 93.33%, 100% { opacity: 0; } }
+@keyframes efDecorRingOut { 0% { opacity: 1; scale: 1 1; } 33.33% { opacity: 0.85; scale: 0.93 0.76; } 66.67% { opacity: 0.55; scale: 0.8 0.52; } 80% { opacity: 0.3; } 93.33% { opacity: 0; } 100% { opacity: 0; scale: 0.62 0.36; } }
+/* from where they rest (100%) in to 37% of their distance from the disc centre */
+@keyframes efDecorMarkImplode {
+  0% { translate: 0px 0px 0px; scale: 1 1 1; }
+  20.83% { translate: 9.6px 5.4px 0px; scale: 0.99 0.99 0.99; }
+  41.67% { translate: 86.4px 48.6px 0px; scale: 0.91 0.91 0.91; }
+  62.5% { translate: 259.2px 145.8px 0px; scale: 0.73 0.73 0.73; }
+  83.33% { translate: 451.2px 253.8px 0px; scale: 0.53 0.53 0.53; }
+  100% { translate: 604.8px 340.2px 0px; scale: 0.37 0.37 0.37; }
+}
+@keyframes efDecorMarkOut { 0% { opacity: 1; scale: 1; } 20.83% { scale: 1.0101; } 41.67% { scale: 1.0989; } 62.5% { opacity: 1; scale: 1.3699; } 83.33% { opacity: 0.6; scale: 1.8868; } 95.83% { opacity: 0; } 100% { opacity: 0; scale: 2.7027; } }

@@ -1,0 +1,82 @@
+/* The two yellow disc buttons' styles, migrated verbatim from the demo's disc-buttons.js. */
+
+.ef-discbtns { position: absolute; inset: 0; width: 100%; height: 100%; overflow: visible; pointer-events: none; z-index: 3; }
+.ef-dcsh-move {
+  --ef-h: 30;
+  transform: translate(calc((var(--ef-shx0) + var(--ef-swx, 0) * var(--ef-h)) * 1px),
+                       calc((var(--ef-shy0) + var(--ef-swy, 0) * var(--ef-h)) * 1px));
+}
+.ef-discbtn {
+  pointer-events: auto; cursor: pointer; transition: filter 0.15s;
+}
+.ef-discbtn:hover { filter: brightness(1.07) drop-shadow(0 0 5px rgba(255,222,0,0.36)) drop-shadow(0 0 13px rgba(255,222,0,0.18)); }
+
+.ef-disclabels { position: absolute; inset: 0; width: 100%; height: 100%; overflow: visible; pointer-events: none; z-index: 3; }
+.ef-disclabels text { font-family: var(--ef-font-cn); font-weight: 450; }
+.ef-disclab { fill: #fff; }
+.ef-disclab-sh, .ef-discicon-sh {
+  --ef-h: 7.5;
+  transform: translate(calc((var(--ef-shx0) + var(--ef-swx, 0) * var(--ef-h)) * 1px),
+                       calc((var(--ef-shy0) + var(--ef-swy, 0) * var(--ef-h)) * 1px));
+}
+.ef-disclab-sh { fill: #BFB36D; }   /* the labels' pale shadow */
+/* the icons' soft dark shadow: the icon grown a little and blurred (#dcIconBlur) */
+.ef-discicon-sh { fill: #100E06; stroke: #100E06; stroke-width: 0.85; stroke-linejoin: round; opacity: 0.9; }
+.ef-discdecor { fill: #322C07; }
+
+/* Open and close, measured on the game's two tabs (times in this page's timeline, see index.css). Each button is one
+   group in each svg (.ef-dctab, in stage px and unrotated), which drops into place on open and sinks on close; the
+   fades are on the layers inside it. As in the game, the button's body is split into layers that fade in on the same
+   beat: the back plate, the bottom layer (the see-through top), the bright band and the stroke layer (grid, strokes,
+   decal, hit area). The game's bottom layer (50% yellow) covers the whole tab, so where the band lies two layers add up
+   to b = a + (1 - a) a / 2. Here the top half and the band do not overlap, and under the band the bottom layer only
+   has the back plate's 0.13 yellow, so the band follows beta = (b - 0.13 a) / (1 - 0.13 a) (each segment fitted with
+   cubic-bezier(1/3, y1, 2/3, y2), within 0.001), which over the plate's fill gives exactly b. The labels' group (icon,
+   label and their shadows) fades in as one.
+   - plan (the left button): its body lights up first, its label 20 ms later, and both drop into place from above;
+   - brief (the right one) lights up in place by steps, its label dipping back once on the way;
+   - on close both go together: the bodies go out first, the labels a moment later, and both sink linearly.
+   The drop and the sink are -7 px and 25 px on screen as in the game; 1 svg unit is about 1.21 px on screen here (in
+   both svgs), hence -5.8 and 20.6. The first keyframes carry visibility: hidden, which the fill keeps during the delays
+   (and the hit area, pointer-events="visible", takes no hover or click until it shows). */
+@media (prefers-reduced-motion: no-preference) {
+  /* plan's body: lights up from 346 ms, 0.36 at 400 ms, full at 454 ms; the band on the same beat by beta (0.4494 at
+     400 ms, which adds up to 0.4752) */
+  body.ef-in .ef-discbtns .ef-dctab--plan .ef-dclayer { animation: efBtnPlate1In 108ms 346ms linear both; }
+  body.ef-in .ef-discbtns .ef-dctab--plan .ef-dcband { animation: efBtnBand1In 108ms 346ms linear both; }
+  /* plan drops into place at 366-450 ms, body and label together (held above until then) */
+  body.ef-in .ef-discbtns .ef-dctab--plan { animation: efBtnDrop 84ms 366ms linear both; }
+  /* plan's label: lights up from 366 ms, 0.36 at 400 ms, full at 454 ms, and drops with the body */
+  body.ef-in .ef-disclabels .ef-dctab--plan { animation: efBtnFace1In 88ms 366ms linear both, efBtnDrop 84ms 366ms linear both; }
+  /* brief's body: from 345 ms, 0.25 at 400 ms, 0.35 at 450 ms, 0.5 at 500-560 ms, full at 595 ms (no drop); the band by
+     beta 0.3217 / 0.4382 / 0.5989 (adding up to 0.3438 / 0.4638 / 0.625) */
+  body.ef-in .ef-discbtns .ef-dctab--brief .ef-dclayer { animation: efBtnPlate2In 250ms 345ms linear both; }
+  body.ef-in .ef-discbtns .ef-dctab--brief .ef-dcband { animation: efBtnBand2In 250ms 345ms linear both; }
+  /* brief's label: from 470 ms, 0.42 at 500 ms, back to 0.3 at 550-560 ms, full at 595 ms */
+  body.ef-in .ef-disclabels .ef-dctab--brief { animation: efBtnFace2In 125ms 470ms linear both; }
+  /* close: the bodies' layers fade out at 98-145 ms (the band by beta), the labels at 98-158 ms; both sink at 75-201 ms */
+  body.ef-out .ef-discbtns .ef-dclayer { animation: efBtnOut 47ms 98ms linear both; }
+  body.ef-out .ef-discbtns .ef-dcband { animation: efBtnBandOut 47ms 98ms linear both; }
+  body.ef-out .ef-discbtns .ef-dctab { animation: efBtnSink 126ms 75ms linear both; }
+  body.ef-out .ef-disclabels .ef-dctab { animation: efBtnOut 60ms 98ms linear both, efBtnSink 126ms 75ms linear both; }
+}
+@keyframes efBtnPlate1In { 0% { opacity: 0; visibility: hidden; } 50.12% { opacity: 0.36; } 100% { opacity: 1; } }
+@keyframes efBtnBand1In {
+  0% { opacity: 0; visibility: hidden; animation-timing-function: cubic-bezier(0.3333, 0.3658, 0.6667, 0.7007); }
+  50.12% { opacity: 0.4494; animation-timing-function: cubic-bezier(0.3333, 0.4341, 0.6667, 0.7771); }
+  100% { opacity: 1; }
+}
+@keyframes efBtnFace1In { 0% { opacity: 0; visibility: hidden; } 38.76% { opacity: 0.36; } 100% { opacity: 1; } }
+@keyframes efBtnPlate2In { 0% { opacity: 0; visibility: hidden; } 22.04% { opacity: 0.25; } 42% { opacity: 0.35; } 62.06%, 85.97% { opacity: 0.5; } 100% { opacity: 1; } }
+@keyframes efBtnBand2In {
+  0% { opacity: 0; visibility: hidden; animation-timing-function: cubic-bezier(0.3333, 0.3549, 0.6667, 0.6889); }
+  22.04% { opacity: 0.3217; animation-timing-function: cubic-bezier(0.3333, 0.3436, 0.6667, 0.6771); }
+  42% { opacity: 0.4382; animation-timing-function: cubic-bezier(0.3333, 0.351, 0.6667, 0.6847); }
+  62.06%, 85.97% { opacity: 0.5989; animation-timing-function: cubic-bezier(0.3333, 0.4212, 0.6667, 0.7611); }
+  100% { opacity: 1; }
+}
+@keyframes efBtnFace2In { 0% { opacity: 0; visibility: hidden; } 24.12% { opacity: 0.42; } 64.03%, 71.93% { opacity: 0.3; } 100% { opacity: 1; } }
+@keyframes efBtnDrop { from { translate: 0 -5.8px; } to { translate: 0 0; } }
+@keyframes efBtnOut { from { opacity: 1; } to { opacity: 0; visibility: hidden; } }
+@keyframes efBtnBandOut { from { opacity: 1; animation-timing-function: cubic-bezier(0.3333, 0.1921, 0.6667, 0.5439); } to { opacity: 0; visibility: hidden; } }
+@keyframes efBtnSink { from { translate: 0 0; } to { translate: 0 20.6px; } }

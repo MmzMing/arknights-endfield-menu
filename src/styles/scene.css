@@ -1,0 +1,22 @@
+/* 3D scene styles, migrated verbatim from the demo's shared-scene.js (EF.addStyle("scene", …)). */
+
+@property --ef-cam-rx { syntax: '<angle>'; inherits: false; initial-value: 20deg; }
+@property --ef-cam-ry { syntax: '<angle>'; inherits: false; initial-value: 0deg; }
+@property --ef-swx { syntax: '<number>'; inherits: false; initial-value: 0; }
+@property --ef-swy { syntax: '<number>'; inherits: false; initial-value: 0; }
+
+.ef-scene {
+  position: absolute; inset: 0;
+  transform: scale(var(--ef-zoom, 1));
+  perspective: 1600px; perspective-origin: 50% 50%;
+}
+.ef-world {
+  position: absolute; inset: 0; transform-style: preserve-3d; transform-origin: 50% 50%;
+  transform: translate(29px, -40px) rotateZ(-1deg) rotateX(var(--ef-cam-rx)) rotateY(var(--ef-cam-ry));
+}
+.ef-lyr { position: absolute; inset: 0; pointer-events: none; }
+.ef-lyr, [data-ef-z] {
+  transform: translateZ(calc(var(--z, 0) * 1px)) translate(calc(var(--ctx, 0) * 1px), calc(var(--cty, 0) * 1px)) scale(var(--cs, 1));
+}
+/* The camera takes no part in opening and closing: the disc poses on its own layer (disc) and every other part
+   comes and goes in place. */

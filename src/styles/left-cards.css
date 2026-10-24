@@ -1,0 +1,159 @@
+/* Left column styles, migrated verbatim from the demo's left-cards.js. */
+
+.ef-links { position: absolute; inset: 0; width: 100%; height: 100%; pointer-events: none; }
+.ef-left, .ef-left__slide { position: absolute; inset: 0; pointer-events: none; }
+/* The entrance light: a blurred, card-shaped glow that comes up where each card is about to appear (only shown while
+   the menu opens). */
+.ef-left__flash { position: absolute; inset: 0; width: 100%; height: 100%; overflow: visible; pointer-events: none; display: none; }
+
+/* The wrapper places the card (transform) and carries its entrance slide and exit jump (translate). Those are two
+   registered lengths, as x and y move on different curves; --ef-card-kx / ky make up for this layer's perspective
+   (1 px here is 1.04-1.15 px on screen, a little different per card), so the motion on screen matches the game's. */
+@property --ef-card-x { syntax: '<length>'; inherits: false; initial-value: 0px; }
+@property --ef-card-y { syntax: '<length>'; inherits: false; initial-value: 0px; }
+.ef-card-shadow {
+  position: absolute; left: 0; top: 0; width: 440px; height: 172px; pointer-events: none;
+  transform: translate(var(--cx), var(--cy)); transform-origin: 350px 50%;
+  translate: calc(var(--ef-card-x) * var(--ef-card-kx, 1)) calc(var(--ef-card-y) * var(--ef-card-ky, 1));
+}
+.ef-left__slide > .ef-card-shadow:nth-child(1) { --ef-card-kx: 0.93; --ef-card-ky: 1.07; }
+.ef-left__slide > .ef-card-shadow:nth-child(2) { --ef-card-kx: 0.89; --ef-card-ky: 1; }
+.ef-left__slide > .ef-card-shadow:nth-child(3) { --ef-card-kx: 0.86; --ef-card-ky: 0.93; }
+.ef-left__slide > .ef-card-shadow:nth-child(4) { --ef-card-kx: 0.83; --ef-card-ky: 0.87; }
+.ef-card__sh {
+  position: absolute; inset: 0; width: 100%; height: 100%; overflow: visible; pointer-events: none;
+  --ef-h: 44; --ef-shx0: var(--ef-card-shx); --ef-shy0: var(--ef-card-shy);
+  transform: translate(calc((var(--ef-shx0) + var(--ef-swx, 0) * var(--ef-h)) * 1px),
+                       calc((var(--ef-shy0) + var(--ef-swy, 0) * var(--ef-h)) * 1px));
+}
+.ef-card__sh .sh-ring { fill: none; stroke: rgba(255,255,250,0.33); stroke-width: 2.5; }
+.ef-card__sh .sh-fill { fill: rgba(255,255,250,0.27); }
+.ef-card__glowsvg { position: absolute; inset: 0; width: 100%; height: 100%; overflow: visible; pointer-events: none; }
+
+.ef-card {
+  position: absolute; inset: 0; padding: 0; border: 0; background: none; text-align: left;
+  color: var(--ef-ink); pointer-events: none;
+}
+/* The hit area: a still layer on the button, shaped like the face (--ef-card-hit), that only takes the pointer. It
+   does not lift on hover, so a pointer resting on a card's lower or right edge cannot make the lift flicker. */
+.ef-card::before { content: ""; position: absolute; inset: 0; clip-path: var(--ef-card-hit, none); pointer-events: auto; cursor: pointer; }
+.ef-card__face {
+  position: absolute; inset: 0; pointer-events: none;
+  background: linear-gradient(45deg, rgba(222,220,215,0.86) 0%, rgba(189,187,182,0.82) 45%, rgba(144,142,137,0.78) 100%);
+}
+.ef-card__panel { position: absolute; inset: 0; width: 100%; height: 100%; overflow: visible; pointer-events: none; z-index: -1; }
+.ef-card__plate { fill: rgba(255,253,247,0.31); fill-rule: evenodd; }
+.ef-card__contour path { fill: none; stroke: #23231f; stroke-linecap: round; stroke-linejoin: round; }
+.ef-card__ring { position: absolute; inset: 0; width: 100%; height: 100%; overflow: visible; pointer-events: none; }
+.ef-card__ringpath { fill: none; stroke: rgba(242,242,236,0.72); stroke-width: 2; }
+
+/* Icon and label in the card box: traced artwork (filled with the game's ink) and Noto Sans SC. */
+.ef-card__art { position: absolute; inset: 0; width: 100%; height: 100%; overflow: visible; pointer-events: none; fill: #313131; }
+.ef-card__art text { font-family: var(--ef-font-cn); font-weight: 550; }
+
+/* Hover and press, as in the game: the card lifts by (-2, -3) and brightens to the game's hover white (#f4f4f2 at 0.82,
+   over the plate and the contours, under the icon and label); pressing shrinks it to 0.97. The back plate and the glow
+   lift and shrink with the face and the ring (the same box, so the same centre); the wrapper's translate belongs to
+   the entrance and the exit. The four layers are named by class, one selector each: a universal selector here would
+   make a hover restyle every element of the card, and a class list inside :is() would be tested against every element
+   the page restyles. No hover is kept while the menu closes (the pointer may still rest on a card). */
+.ef-card__sh, .ef-card__glowsvg, .ef-card__face, .ef-card__ring {
+  transition: translate 0.2s cubic-bezier(.22,1,.36,1), scale 0.14s cubic-bezier(.22,1,.36,1);
+}
+.ef-card-shadow:hover .ef-card__sh, .ef-card-shadow:hover .ef-card__glowsvg, .ef-card-shadow:hover .ef-card__face,
+.ef-card-shadow:hover .ef-card__ring { translate: -2px -3px; }
+.ef-card-shadow:active .ef-card__sh, .ef-card-shadow:active .ef-card__glowsvg, .ef-card-shadow:active .ef-card__face,
+.ef-card-shadow:active .ef-card__ring { scale: 0.97; }
+.ef-card__hl { fill: #f4f4f2; opacity: 0; transition: opacity 0.2s cubic-bezier(.22,1,.36,1); }
+.ef-card-shadow:hover .ef-card__hl { opacity: 0.82; }
+body.ef-out .ef-card-shadow .ef-card__sh, body.ef-out .ef-card-shadow .ef-card__glowsvg, body.ef-out .ef-card-shadow .ef-card__face,
+body.ef-out .ef-card-shadow .ef-card__ring { translate: none; scale: none; }
+body.ef-out .ef-card::before { pointer-events: none; }
+body.ef-out .ef-card-shadow .ef-card__hl { opacity: 0; }
+
+/* Open and close, measured on the game's menu (times in this page's timeline, see index.css).
+   Open: each card (back plate and face together) shows on the game's measured opacity curve (its keyframes'
+   monotone Hermite spline, one cubic-bezier per segment), and its icon and label replay the same curve 10 ms later
+   (the two multiply: first an empty plate, then the glyphs) while it slides the last few px in from the disc's side
+   (power3 out, 180 ms); its glow fades in after it. Before each card appears, a blurred light comes up in its place and
+   dies away. The cables fade in at 270-290 ms while swinging in, squashed and tilted (270-470 ms).
+   Close: all four jump about 70 px to the left, then implode towards the disc while fading (the first card is gone at
+   150 ms, the fourth at 200 ms, the middle two at 250 ms); the glows go first (50-100 ms); the cables sag 4 px and
+   fade out at 120-190 ms. */
+@media (prefers-reduced-motion: no-preference) {
+  body.ef-in .ef-left__flash { display: block; }
+  /* card 1: shows from 335 ms, slides from 340 ms; its light 310-440 ms */
+  body.ef-in .ef-left__slide > .ef-card-shadow:nth-child(1) { animation: efCardIn1A 155ms 335ms linear both, efCardIn1S 180ms 340ms cubic-bezier(.25,1,.5,1) both; }
+  body.ef-in .ef-left__slide > .ef-card-shadow:nth-child(1) .ef-card__art { animation: efCardIn1A 155ms 345ms linear both; }
+  body.ef-in .ef-left__slide > .ef-card-shadow:nth-child(1) > .ef-card__glowsvg { animation: efCardGlowIn 120ms 340ms cubic-bezier(.5,1,.89,1) both; }
+  body.ef-in .ef-left__flashb:nth-of-type(1) { animation: efCardFlash1 130ms 310ms linear both; }
+  /* card 2: 348 / 355 ms; its light 310-455 ms */
+  body.ef-in .ef-left__slide > .ef-card-shadow:nth-child(2) { animation: efCardIn2A 142ms 348ms linear both, efCardIn2S 180ms 355ms cubic-bezier(.25,1,.5,1) both; }
+  body.ef-in .ef-left__slide > .ef-card-shadow:nth-child(2) .ef-card__art { animation: efCardIn2A 142ms 358ms linear both; }
+  body.ef-in .ef-left__slide > .ef-card-shadow:nth-child(2) > .ef-card__glowsvg { animation: efCardGlowIn 120ms 355ms cubic-bezier(.5,1,.89,1) both; }
+  body.ef-in .ef-left__flashb:nth-of-type(2) { animation: efCardFlash2 145ms 310ms linear both; }
+  /* card 3: 457 / 457 ms; its light 310-557 ms */
+  body.ef-in .ef-left__slide > .ef-card-shadow:nth-child(3) { animation: efCardIn3A 73ms 457ms linear both, efCardIn3S 180ms 457ms cubic-bezier(.25,1,.5,1) both; }
+  body.ef-in .ef-left__slide > .ef-card-shadow:nth-child(3) .ef-card__art { animation: efCardIn3A 73ms 467ms linear both; }
+  body.ef-in .ef-left__slide > .ef-card-shadow:nth-child(3) > .ef-card__glowsvg { animation: efCardGlowIn 120ms 457ms cubic-bezier(.5,1,.89,1) both; }
+  body.ef-in .ef-left__flashb:nth-of-type(3) { animation: efCardFlash3 247ms 310ms linear both; }
+  /* card 4: 502 / 505 ms; its light 310-605 ms */
+  body.ef-in .ef-left__slide > .ef-card-shadow:nth-child(4) { animation: efCardIn4A 148ms 502ms linear both, efCardIn4S 180ms 505ms cubic-bezier(.25,1,.5,1) both; }
+  body.ef-in .ef-left__slide > .ef-card-shadow:nth-child(4) .ef-card__art { animation: efCardIn4A 148ms 512ms linear both; }
+  body.ef-in .ef-left__slide > .ef-card-shadow:nth-child(4) > .ef-card__glowsvg { animation: efCardGlowIn 120ms 505ms cubic-bezier(.5,1,.89,1) both; }
+  body.ef-in .ef-left__flashb:nth-of-type(4) { animation: efCardFlash4 295ms 310ms linear both; }
+  body.ef-in .ef-links__b { animation: efCardLinkIn 20ms 270ms linear both, efCardLinkSwing 200ms 270ms linear both; }
+  /* close: x, y and opacity of a card start together at 50 ms and last 100 ms (card 1), 200 ms (cards 2 and 3) or
+     150 ms (card 4) */
+  body.ef-out .ef-left__slide > .ef-card-shadow:nth-child(1) { animation: efCardOut1X 100ms 50ms linear both, efCardOut1Y 100ms 50ms linear both, efCardOut1A 100ms 50ms linear both; }
+  body.ef-out .ef-left__slide > .ef-card-shadow:nth-child(2) { animation: efCardOut2X 200ms 50ms linear both, efCardOut2Y 200ms 50ms linear both, efCardOut2A 200ms 50ms linear both; }
+  body.ef-out .ef-left__slide > .ef-card-shadow:nth-child(3) { animation: efCardOut3X 200ms 50ms linear both, efCardOut3Y 200ms 50ms linear both, efCardOut3A 200ms 50ms linear both; }
+  body.ef-out .ef-left__slide > .ef-card-shadow:nth-child(4) { animation: efCardOut4X 150ms 50ms linear both, efCardOut4Y 150ms 50ms linear both, efCardOut4A 150ms 50ms linear both; }
+  body.ef-out .ef-card__glowsvg { animation: efCardGlowOut 50ms 50ms cubic-bezier(.11,0,.5,0) both; }
+  body.ef-out .ef-links__b { animation: efCardLinkSag 50ms 50ms cubic-bezier(.33,1,.68,1) both, efCardLinkOut 70ms 120ms cubic-bezier(.11,0,.5,0) both; }
+}
+/* The opacity curves: the game's keyframes as a monotone Hermite spline, each segment an exact cubic-bezier(1/3, m0/3,
+   2/3, 1 - m1/3) (an overshoot past [0, 1] is clipped by opacity itself). */
+@keyframes efCardIn1A { 0% { opacity: 0; visibility: hidden; animation-timing-function: cubic-bezier(.3333, 0, .6667, .6462); } 9.677% { opacity: .2; animation-timing-function: cubic-bezier(.3333, .3276, .6667, .8183); } 41.935% { opacity: .92; animation-timing-function: cubic-bezier(.3333, 2.0128, .6667, .7721); } 74.194% { opacity: .985; animation-timing-function: cubic-bezier(.3333, .7901, .6667, 1); } 100% { opacity: 1; } }
+@keyframes efCardIn2A { 0% { opacity: 0; visibility: hidden; animation-timing-function: cubic-bezier(.3333, 0, .6667, .7502); } 36.62% { opacity: .66; animation-timing-function: cubic-bezier(.3333, .5113, .6667, .7969); } 71.831% { opacity: .97; animation-timing-function: cubic-bezier(.3333, 1.679, .6667, 1); } 100% { opacity: 1; } }
+@keyframes efCardIn3A { 0% { opacity: 0; visibility: hidden; animation-timing-function: cubic-bezier(.3333, 0, .6667, .8117); } 54.795% { opacity: .97; animation-timing-function: cubic-bezier(.3333, 5.0228, .6667, 1); } 100% { opacity: 1; } }
+@keyframes efCardIn4A { 0% { opacity: 0; visibility: hidden; animation-timing-function: cubic-bezier(.3333, 0, .6667, .8154); } 32.432% { opacity: .84; animation-timing-function: cubic-bezier(.3333, 1.4688, .6667, .7576); } 66.216% { opacity: .95; animation-timing-function: cubic-bezier(.3333, .5333, .6667, 1); } 100% { opacity: 1; } }
+/* the slide in from the disc's side (the game's offsets, turned into this layer's px by --ef-card-kx / ky) */
+@keyframes efCardIn1S { from { --ef-card-x: 24px; --ef-card-y: 0px; } }
+@keyframes efCardIn2S { from { --ef-card-x: 30px; --ef-card-y: -1px; } }
+@keyframes efCardIn3S { from { --ef-card-x: 7px; --ef-card-y: 7px; } }
+@keyframes efCardIn4S { from { --ef-card-x: 2px; --ef-card-y: 4px; } }
+@keyframes efCardGlowIn { from { opacity: 0; visibility: hidden; } }
+@keyframes efCardGlowOut { to { opacity: 0; visibility: hidden; } }
+/* the lights: rise linearly from 310 ms to their peak when the card appears (peak = min(limit, rate x time)), then die
+   away over 100 ms (power1 out) */
+@keyframes efCardFlash1 { 0% { opacity: 0; } 23.08% { opacity: .09; animation-timing-function: cubic-bezier(.5,1,.89,1); } 100% { opacity: 0; } }
+@keyframes efCardFlash2 { 0% { opacity: 0; } 31.03% { opacity: .135; animation-timing-function: cubic-bezier(.5,1,.89,1); } 100% { opacity: 0; } }
+@keyframes efCardFlash3 { 0% { opacity: 0; } 59.51% { opacity: .42; animation-timing-function: cubic-bezier(.5,1,.89,1); } 100% { opacity: 0; } }
+@keyframes efCardFlash4 { 0% { opacity: 0; } 66.1% { opacity: .45; animation-timing-function: cubic-bezier(.5,1,.89,1); } 100% { opacity: 0; } }
+/* the cables swing in: all squashed vertically (y' = a + s y, about the stage's y = 0) and shifted by dx, each bundle
+   tilted about its card end (--ef-lnk-x / y); linear in between */
+@keyframes efCardLinkIn { from { opacity: 0; visibility: hidden; } }
+@keyframes efCardLinkSwing {
+  0% { transform: translate(30px, 95.9px) scale(1, 0.55) translate(var(--ef-lnk-x), var(--ef-lnk-y)) rotate(16deg) translate(calc(-1 * var(--ef-lnk-x)), calc(-1 * var(--ef-lnk-y))); }
+  15% { transform: translate(18px, 25.5px) scale(1, 0.783) translate(var(--ef-lnk-x), var(--ef-lnk-y)) rotate(13deg) translate(calc(-1 * var(--ef-lnk-x)), calc(-1 * var(--ef-lnk-y))); }
+  40% { transform: translate(0px, -1.4px) scale(1, 0.98) translate(var(--ef-lnk-x), var(--ef-lnk-y)) rotate(4deg) translate(calc(-1 * var(--ef-lnk-x)), calc(-1 * var(--ef-lnk-y))); }
+  65% { transform: translate(0px, 0px) scale(1, 1) translate(var(--ef-lnk-x), var(--ef-lnk-y)) rotate(0.5deg) translate(calc(-1 * var(--ef-lnk-x)), calc(-1 * var(--ef-lnk-y))); }
+  100% { transform: translate(0px, 0px) scale(1, 1) translate(var(--ef-lnk-x), var(--ef-lnk-y)) rotate(0deg) translate(calc(-1 * var(--ef-lnk-x)), calc(-1 * var(--ef-lnk-y))); }
+}
+@keyframes efCardLinkSag { to { transform: translateY(4px); } }
+@keyframes efCardLinkOut { to { opacity: 0; visibility: hidden; } }
+/* The implosion: the game's keys (plus a halfway key 15 ms in, which makes the jump a fast ease-out); x, y and opacity
+   share the key times, each segment with its own curve. */
+@keyframes efCardOut1X { 0% { --ef-card-x: 0px; animation-timing-function: cubic-bezier(.3333, 0, .6667, .8); } 15% { --ef-card-x: -39.5px; animation-timing-function: cubic-bezier(.3333, .4667, .6667, 1); } 50% { --ef-card-x: -79px; animation-timing-function: cubic-bezier(.3333, 0, .6667, 1); } 100% { --ef-card-x: -72px; } }
+@keyframes efCardOut1Y { 0% { --ef-card-y: 0px; animation-timing-function: cubic-bezier(.3333, 0, .6667, .8); } 15% { --ef-card-y: 3.75px; animation-timing-function: cubic-bezier(.3333, .4667, .6667, 1); } 50% { --ef-card-y: 7.5px; animation-timing-function: cubic-bezier(.3333, 0, .6667, 1); } 100% { --ef-card-y: 0px; } }
+@keyframes efCardOut1A { 0% { opacity: 1; animation-timing-function: cubic-bezier(.3333, 0, .6667, .72); } 15% { opacity: .95; animation-timing-function: cubic-bezier(.3333, .363, .6667, -.3878); } 50% { opacity: .86; animation-timing-function: cubic-bezier(.3333, .2176, .6667, 1); } 100% { opacity: .04; visibility: hidden; } }
+@keyframes efCardOut2X { 0% { --ef-card-x: 0px; animation-timing-function: cubic-bezier(.3333, 0, .6667, .8); } 7.5% { --ef-card-x: -40.75px; animation-timing-function: cubic-bezier(.3333, .4667, .6667, 1); } 25% { --ef-card-x: -81.5px; animation-timing-function: cubic-bezier(.3333, 0, .6667, .3056); } 50% { --ef-card-x: -69.5px; animation-timing-function: cubic-bezier(.3333, .2193, .6667, .6689); } 75% { --ef-card-x: -31.5px; animation-timing-function: cubic-bezier(.3333, .3356, .6667, 1); } 100% { --ef-card-x: 6px; } }
+@keyframes efCardOut2Y { 0% { --ef-card-y: 0px; animation-timing-function: cubic-bezier(.3333, 0, .6667, .8); } 7.5% { --ef-card-y: 4.75px; animation-timing-function: cubic-bezier(.3333, .4667, .6667, 1); } 25% { --ef-card-y: 9.5px; animation-timing-function: cubic-bezier(.3333, 0, .6667, .4259); } 50% { --ef-card-y: 5px; animation-timing-function: cubic-bezier(.3333, .2348, .6667, .6818); } 75% { --ef-card-y: -6px; animation-timing-function: cubic-bezier(.3333, .35, .6667, 1); } 100% { --ef-card-y: -16px; } }
+@keyframes efCardOut2A { 0% { opacity: 1; animation-timing-function: cubic-bezier(.3333, 0, .6667, .68); } 7.5% { opacity: .95; animation-timing-function: cubic-bezier(.3333, .3394, .6667, .7504); } 25% { opacity: .84; animation-timing-function: cubic-bezier(.3333, .4357, .6667, .6667); } 50% { opacity: .75; animation-timing-function: cubic-bezier(.3333, .3333, .6667, -.3889); } 75% { opacity: .66; animation-timing-function: cubic-bezier(.3333, .1894, .6667, 1); } 100% { opacity: 0; visibility: hidden; } }
+@keyframes efCardOut3X { 0% { --ef-card-x: 0px; animation-timing-function: cubic-bezier(.3333, 0, .6667, .8); } 7.5% { --ef-card-x: -34.75px; animation-timing-function: cubic-bezier(.3333, .4667, .6667, 1); } 25% { --ef-card-x: -69.5px; animation-timing-function: cubic-bezier(.3333, 0, .6667, .2121); } 50% { --ef-card-x: -58.5px; animation-timing-function: cubic-bezier(.3333, .2114, .6667, .6646); } 75% { --ef-card-x: -17.5px; animation-timing-function: cubic-bezier(.3333, .3313, .6667, 1); } 100% { --ef-card-x: 24px; } }
+@keyframes efCardOut3Y { 0% { --ef-card-y: 0px; animation-timing-function: cubic-bezier(.3333, 0, .6667, .8); } 7.5% { --ef-card-y: 3.75px; animation-timing-function: cubic-bezier(.3333, .4667, .6667, 1); } 25% { --ef-card-y: 7.5px; animation-timing-function: cubic-bezier(.3333, 0, .6667, .3095); } 50% { --ef-card-y: -3px; animation-timing-function: cubic-bezier(.3333, .2197, .6667, .6667); } 75% { --ef-card-y: -36px; animation-timing-function: cubic-bezier(.3333, .3333, .6667, 1); } 100% { --ef-card-y: -69px; } }
+@keyframes efCardOut3A { 0% { opacity: 1; animation-timing-function: cubic-bezier(.3333, 0, .6667, .76); } 7.5% { opacity: .95; animation-timing-function: cubic-bezier(.3333, .4, .6667, .7255); } 25% { opacity: .88; animation-timing-function: cubic-bezier(.3333, .3922, .6667, .6429); } 50% { opacity: .81; animation-timing-function: cubic-bezier(.3333, .3125, .6667, -.6875); } 75% { opacity: .73; animation-timing-function: cubic-bezier(.3333, .1849, .6667, 1); } 100% { opacity: 0; visibility: hidden; } }
+@keyframes efCardOut4X { 0% { --ef-card-x: 0px; animation-timing-function: cubic-bezier(.3333, 0, .6667, .8); } 10% { --ef-card-x: -32px; animation-timing-function: cubic-bezier(.3333, .4667, .6667, .8585); } 33.333% { --ef-card-x: -64px; animation-timing-function: cubic-bezier(.3333, 6.4706, .6667, .6667); } 66.667% { --ef-card-x: -65px; animation-timing-function: cubic-bezier(.3333, .3333, .6667, 1); } 100% { --ef-card-x: -66px; } }
+@keyframes efCardOut4Y { 0% { --ef-card-y: 0px; animation-timing-function: cubic-bezier(.3333, 0, .6667, .8); } 10% { --ef-card-y: 3.75px; animation-timing-function: cubic-bezier(.3333, .4667, .6667, 1); } 33.333% { --ef-card-y: 7.5px; animation-timing-function: cubic-bezier(.3333, 0, .6667, .6728); } 66.667% { --ef-card-y: -6px; animation-timing-function: cubic-bezier(.3333, .3397, .6667, 1); } 100% { --ef-card-y: -19px; } }
+@keyframes efCardOut4A { 0% { opacity: 1; animation-timing-function: cubic-bezier(.3333, 0, .6667, .74); } 10% { opacity: .95; animation-timing-function: cubic-bezier(.3333, .3792, .6667, .7941); } 33.333% { opacity: .87; animation-timing-function: cubic-bezier(.3333, .5882, .6667, -2.625); } 66.667% { opacity: .83; animation-timing-function: cubic-bezier(.3333, .1747, .6667, 1); } 100% { opacity: 0; visibility: hidden; } }

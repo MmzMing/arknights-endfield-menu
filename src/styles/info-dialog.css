@@ -1,0 +1,89 @@
+/* Info dialog: an Endfield-styled panel for [data-action] clicks. Its visual language borrows the measured
+   pieces of the menu itself — the player badge's dark plate and gold rim, the news frame's yellow rim and
+   flip-up entrance, the mono/EN type system. It is new scope (the demo had no dialog), so its timings reuse
+   the news frame's measured entrance curve (62.5deg flip, 0.85→1 scale) rather than inventing new motion. */
+
+.ef-idlg { position: fixed; inset: 0; z-index: 50; }
+
+/* backdrop: the menu's own dim colour, fading in over the exit's beat */
+.ef-idlg__dim { position: absolute; inset: 0; background: rgba(10,12,14,0.52); }
+@media (prefers-reduced-motion: no-preference) {
+  .ef-idlg__dim { animation: efIdlgDimIn 200ms ease-out both; }
+}
+@keyframes efIdlgDimIn { from { opacity: 0; } }
+
+/* the panel */
+.ef-idlg__panel {
+  position: absolute; left: 50%; top: 50%; width: 560px; margin: -170px 0 0 -280px;
+  padding: 26px 30px 22px; color: #fff; cursor: default;
+  background: linear-gradient(135deg, rgba(56,60,66,0.97) 0%, rgba(28,31,36,0.97) 48%, rgba(13,15,18,0.98) 100%);
+  border-radius: 11px 22px 10px 11px;
+  box-shadow: 0 18px 50px rgba(0,0,0,0.55), inset 0 2px 0 rgba(255,255,255,0.22), inset 0 0 0 1px rgba(255,255,255,0.05),
+              inset 0 -10px 22px rgba(0,0,0,0.4);
+}
+/* the yellow rim, like the news frame's: brightest at the top-left, fading along the right */
+.ef-idlg__panel::before {
+  content: ""; position: absolute; inset: -2px; border-radius: 13px 24px 12px 13px; padding: 3.5px; pointer-events: none;
+  background: linear-gradient(100deg, var(--ef-yellow) 0%, rgba(255,222,0,0.7) 36%, rgba(255,222,0,0.33) 60%, rgba(255,222,0,0) 85%);
+  -webkit-mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0);
+  -webkit-mask-composite: xor; mask-composite: exclude;
+}
+/* the corner cut, Endfield style: a yellow chevron on the top-left of the rim */
+.ef-idlg__panel::after {
+  content: ""; position: absolute; left: 26px; top: -2px; width: 46px; height: 8px; pointer-events: none;
+  background: linear-gradient(90deg, var(--ef-yellow), rgba(255,222,0,0));
+  clip-path: polygon(0 0, 100% 0, calc(100% - 8px) 100%, 0 100%);
+}
+
+/* entrance/exit: the news frame's measured flip-up (62.5deg about the bottom edge, 0.85→1, from below-left) */
+@media (prefers-reduced-motion: no-preference) {
+  .ef-idlg__panel { transform-origin: 50% 100%; animation: efIdlgIn 260ms cubic-bezier(.33,1,.68,1) both; }
+}
+@keyframes efIdlgIn {
+  0% { translate: -92px 35.7px; rotate: x 62.5deg; scale: 0.85; opacity: 0; }
+  4.62% { opacity: 1; }
+  50% { translate: -2.5px 2.72px; rotate: x 3.1deg; scale: 0.9926; }
+  100% { translate: 0px 0px; rotate: x 0deg; scale: 1; opacity: 1; }
+}
+
+/* head: English title over the Chinese subtitle, with the entry's artwork at the left */
+.ef-idlg__head { display: grid; grid-template-columns: 104px 1fr auto; gap: 20px; align-items: center; }
+.ef-idlg__icon {
+  width: 104px; height: 104px; display: grid; place-items: center;
+  background: rgba(255,255,255,0.05);
+  border: 1px dashed rgba(255,255,255,0.25);
+  border-radius: 8px;
+  box-shadow: 0 0 12px rgba(140,235,195,0.22);
+}
+.ef-idlg__icon svg { width: 84px; height: 84px; overflow: visible; fill: #fff; color: #fff; }
+.ef-idlg__title {
+  font-family: var(--ef-font-en); font-weight: 700; font-size: 30px; letter-spacing: 0.06em; line-height: 1;
+  color: var(--ef-yellow); text-transform: uppercase; white-space: nowrap;
+}
+.ef-idlg__subtitle { font-size: 22px; font-weight: 700; letter-spacing: 0.06em; margin-top: 7px; }
+.ef-idlg__no { display: none; }
+.ef-idlg__body { margin-top: 18px; font-size: 15px; line-height: 1.75; color: rgba(255,255,255,0.82); }
+
+/* meta rows: gold labels, dotted leaders */
+.ef-idlg__meta { margin-top: 16px; border-top: 1px solid rgba(255,255,255,0.12); padding-top: 12px; }
+.ef-idlg__row { display: flex; align-items: baseline; gap: 12px; font-size: 13px; line-height: 2; }
+.ef-idlg__row b { font-weight: 600; color: var(--gold, #D5B983); letter-spacing: 0.08em; white-space: nowrap; }
+.ef-idlg__row i { flex: 1; border-bottom: 1px dotted rgba(255,255,255,0.22); transform: translateY(-4px); }
+.ef-idlg__row span { font-family: var(--ef-font-mono); color: rgba(255,255,255,0.65); }
+
+/* footer hint + the close button */
+.ef-idlg__hint {
+  margin-top: 18px; display: flex; justify-content: space-between; align-items: center;
+  font-family: var(--ef-font-mono); font-size: 11px; letter-spacing: 0.28em; color: rgba(255,255,255,0.4);
+}
+.ef-idlg__close {
+  width: 34px; height: 34px; border-radius: 50%; padding: 2px;
+  border: 2px solid rgba(255,255,255,0.92); transition: transform 0.15s;
+}
+.ef-idlg__close span { display: grid; place-items: center; width: 100%; height: 100%; border-radius: 50%; background: #F4F5F6; color: #111315; }
+.ef-idlg__close .ef-icon { width: 16px; height: 16px; stroke-width: 4; }
+.ef-idlg__close:hover { transform: scale(1.06); }
+
+@media (prefers-reduced-motion: reduce) {
+  .ef-idlg__dim, .ef-idlg__panel { animation: none; }
+}
