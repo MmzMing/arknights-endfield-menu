@@ -27,11 +27,9 @@ import { useStageScale } from "./hooks/use-stage-scale";
 /** Hands the scene's imperative api (pause/resume/stageScale) out of the tree. */
 function SceneBridge({ onScene }: { onScene: (api: SceneApi) => void }) {
   const scene = useScene();
-  const ref = useRef(onScene);
-  ref.current = onScene;
   useEffect(() => {
-    ref.current(scene);
-  }, [scene]);
+    onScene(scene);
+  }, [scene, onScene]);
   return null;
 }
 
@@ -98,6 +96,10 @@ export default function App() {
     [menu],
   );
 
+  const onScene = useCallback((api: SceneApi) => {
+    sceneRef.current = api;
+  }, []);
+
   return (
     <MenuActionsContext.Provider value={actions}>
       <SpriteDefs />
@@ -136,7 +138,7 @@ export default function App() {
             <SceneLayer name="top">
               <TopBar content={content.topBar} />
             </SceneLayer>
-            <SceneBridge onScene={(api) => { sceneRef.current = api; }} />
+            <SceneBridge onScene={onScene} />
           </SceneProvider>
           <NetInfo netDelay={content.net.delay} netUid={content.net.uid} />
         </div>

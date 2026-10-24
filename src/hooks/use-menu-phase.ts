@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useLayoutEffect, useRef, useState } from "react";
 
 /* Menu phase orchestration, migrated verbatim from the demo's app.js (setClosed / playEntrance).
    The three body classes drive every entrance/exit keyframe in the CSS (kept on <body> on purpose), so this hook
@@ -58,7 +58,9 @@ export function useMenuPhase(onPhase?: (phase: MenuPhase) => void): MenuPhaseApi
     exitTimer.current = 0;
     document.removeEventListener("animationend", onExitEnd);
   }, [onExitEnd]);
-  stopExitWaitRef.current = stopExitWait;
+  useLayoutEffect(() => {
+    stopExitWaitRef.current = stopExitWait;
+  }, [stopExitWait]);
 
   /** Closing plays the exit (body.ef-out) and adds body.ef-closed once the backdrop has cut back to the wallpaper.
       That waits for the cut's animationend: CSS animations only start counting on the first frame after the class

@@ -1,5 +1,6 @@
 import { useLayoutEffect, useRef, type ReactNode } from "react";
-import { PARTS, useScene } from "../scene/scene-context";
+import { PARTS } from "../scene/scene-constants";
+import { useScene } from "../scene/scene-context";
 import "../styles/disc.css";
 
 /* Central disc: the dark circular well that the dial rings, level pill and flags sit around.

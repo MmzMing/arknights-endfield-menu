@@ -9,6 +9,7 @@ import {
   type ReactNode,
 } from "react";
 import { createPortal } from "react-dom";
+import { CAM, LAYERS, stageScale, type LayerName } from "./scene-constants";
 import "../styles/scene.css";
 
 /* 3D scene: one perspective camera looking down at a tilted "world" plane.
@@ -16,26 +17,8 @@ import "../styles/scene.css";
    layer divs). Each layer is compensated (translateY + scale) so its content still lands on its 2D layout
    coordinates when seen from the default pitch. Moving the mouse sways the camera through a small spring, and
    every element tagged data-ef-shadow leans its drop shadow with the view angle.
-   Camera math migrated verbatim from the demo's shared-scene.js. */
-
-export const CAM = {
-  D: 1600,          // perspective distance in px (same as .ef-scene)
-  pitch: 20,        // resting rotateX of the world plane, deg
-  shift: [29, -40] as const, // the world's resting offset and roll (same as .ef-world's transform)
-  roll: -1,
-  maxYaw: 4,        // mouse sway range, deg
-  maxPitch: 2.5,
-  springK: 8e-3,
-  springDamp: 0.8,
-};
-/** Heights of the parts that live inside the disc cylinder (disc); level = where the level pill appears at rest. */
-export const PARTS = { well: -130, level: 60 };
-/** Layers from back to front, with their height above the plane. The news frame sits just above the dial's
-    white arcs (50) and the tips of its flags (about 70), which it covers in the game; the readouts on top
-    (currencies, stamina, like the exploration level pill) are the highest parts and drift the most when the
-    camera sways. */
-export const LAYERS = { deck: 0, core: 0, btns: 26, tiles: 28, cards: 34, news: 72, top: 144 } as const;
-export type LayerName = keyof typeof LAYERS;
+   Camera math migrated verbatim from the demo's shared-scene.js; the measured constants live in
+   scene-constants.ts. */
 
 const SHADOW_STEPS = 100;   // shadow lean is quantized, so a settled camera restyles nothing
 
@@ -72,6 +55,9 @@ export interface SceneApi {
 
 const SceneContext = createContext<SceneApi | null>(null);
 
+// this module is the scene's context+provider+hook+portal by design (one cohesive unit); the fast-refresh
+// boundary purity rule is traded away for that cohesion
+// oxlint-disable-next-line react(only-export-components)
 export function useScene(): SceneApi {
   const api = useContext(SceneContext);
   if (!api) throw new Error("useScene outside SceneProvider");
@@ -82,7 +68,6 @@ export function SceneProvider({ children }: { children: ReactNode }) {
   const worldRef = useRef<HTMLDivElement>(null);
   // layer elements live in state: SceneLayer portals need them to exist before they can render into them
   const [layerEls, setLayerEls] = useState<Partial<Record<LayerName, HTMLDivElement | null>>>({});
-  const stageScale = useRef({ value: 1 });
 
   /** Lifts an element to height z. Compensation keeps it on its 2D coordinates at the resting pitch: the lift is
       undone by scaling towards the camera, so every point of the element still lies on the same line of sight.
@@ -147,6 +132,8 @@ export function SceneProvider({ children }: { children: ReactNode }) {
     cam.current.rx += vel.current.rx;
     cam.current.ry += vel.current.ry;
     applyCamera();
+    // the spring loop re-arms itself; assigning its own handle here is the demo's exact structure
+    // oxlint-disable-next-line react(immutability)
     rafId.current = requestAnimationFrame(tick);
   }, [applyCamera]);
 
@@ -183,12 +170,24 @@ export function SceneProvider({ children }: { children: ReactNode }) {
       attach,
       pause,
       resume,
-      stageScale: stageScale.current,
+      stageScale,
     }),
     [attach, pause, resume, layerEls],
   );
 
-  // shared-scene.js init(): attach every layer at its height, then face the resting camera and listen
+  // shared-scene.js init(): attach every layer at its height, then face the resting camera and listen;
+  // pause() again on unmount
+  const pausedRef = useRef(pause);
+  useLayoutEffect(() => {
+    pausedRef.current = pause;
+  }, [pause]);
+  useLayoutEffect(
+    () => () => {
+      pausedRef.current();
+    },
+    [],
+  );
+
   useLayoutEffect(() => {
     const allMounted = (Object.keys(LAYERS) as LayerName[]).every((name) => layerEls[name]);
     if (!allMounted) return;
@@ -200,41 +199,31 @@ export function SceneProvider({ children }: { children: ReactNode }) {
     resume();
   }, [attach, applyCamera, resume, layerEls]);
 
-  useEffectCleanup(pause);
-
   // stable per-layer ref callbacks: inline arrows would be re-created every render, and React would then
-  // detach/re-attach each layer's ref, churning layerEls state
-  const layerRefCallbacks = useRef(new Map<LayerName, (el: HTMLDivElement | null) => void>());
-  const getLayerRef = (name: LayerName) => {
-    let cb = layerRefCallbacks.current.get(name);
-    if (!cb) {
-      cb = (el: HTMLDivElement | null) => {
+  // detach/re-attach each layer's ref, churning layerEls state (a memoized map, not a ref, so reading it
+  // during render is fine)
+  const layerRefCallbacks = useMemo(() => {
+    const map = new Map<LayerName, (el: HTMLDivElement | null) => void>();
+    for (const name of Object.keys(LAYERS) as LayerName[]) {
+      map.set(name, (el) => {
         setLayerEls((prev) => (prev[name] === el ? prev : { ...prev, [name]: el }));
-      };
-      layerRefCallbacks.current.set(name, cb);
+      });
     }
-    return cb;
-  };
+    return (n: LayerName) => map.get(n)!;
+  }, []);
 
   return (
     <SceneContext.Provider value={api}>
       <div className="ef-scene">
         <div className="ef-world" id="efWorld" ref={worldRef}>
           {(Object.keys(LAYERS) as LayerName[]).map((name) => (
-            <div key={name} className="ef-lyr" data-lyr={name} ref={getLayerRef(name)} />
+            <div key={name} className="ef-lyr" data-lyr={name} ref={layerRefCallbacks(name)} />
           ))}
           {children}
         </div>
       </div>
     </SceneContext.Provider>
   );
-}
-
-/** Runs a cleanup function on unmount without re-running it when the component re-renders. */
-function useEffectCleanup(cleanup: () => void) {
-  const ref = useRef(cleanup);
-  ref.current = cleanup;
-  useLayoutEffect(() => () => ref.current(), []);
 }
 
 /** Renders children into one of the scene's flat layers (a React portal; children land in tree order, which

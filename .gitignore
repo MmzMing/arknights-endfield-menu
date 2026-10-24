@@ -22,3 +22,7 @@ dist-ssr
 *.njsproj
 *.sln
 *.sw?
+
+# generated test fixtures / artifacts
+src/test/frame/.fonts/
+src/test/frame/.artifacts/

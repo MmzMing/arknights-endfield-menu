@@ -1,5 +1,6 @@
 import { useLayoutEffect, useRef } from "react";
-import { LAYERS, PARTS, useScene } from "../scene/scene-context";
+import { LAYERS, PARTS } from "../scene/scene-constants";
+import { useScene } from "../scene/scene-context";
 import "../styles/level-pill.css";
 
 /* Exploration level pill. It rides on the lower-left of the disc rim, inside the disc cylinder.
