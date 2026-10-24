@@ -16,6 +16,9 @@ export interface CardSpec {
   action: string;
   label: string;
   art: string;
+  /** 光学微调（px）：labelDx 平移整行文字，iconDx 平移 si-* 图标盒；实测 text.x 数组保持不动 */
+  labelDx?: number;
+  iconDx?: number;
   noted?: boolean;
   sheen?: boolean;
   text: LabelLayout;
@@ -99,6 +102,24 @@ function CardMarkup({ card, i, onAction }: { card: CardSpec; i: number; onAction
   const shape = CARD_SHAPES[i];
   const L = LAYOUTS[i];
   const box = { viewBox: `0 0 ${CARD_W} ${CARD_H}` } as const;
+  // icon-pack cards (`si-*` symbols) scale into a square box centred above the label's RENDERED ink centre:
+  // the label's local ink centre (first origin + last origin + last glyph width, CJK glyph ≈ its advance,
+  // plus labelDx) pushed through the label's matrix — without this the matrix's x-shift makes the icon sit
+  // off the label by up to ~15 px on strongly tilted cards; iconDx stays as the per-card optical nudge for
+  // asymmetric art. The demo's extracted art-* groups are absolutely positioned markup and render at their
+  // authored coordinates.
+  const iconBox = (() => {
+    if (!card.art.startsWith("si-")) return null;
+    const size = 64;
+    const xs = card.text.x;
+    const adv = xs.length > 1 ? (xs[xs.length - 1] - xs[0]) / (xs.length - 1) : 0;
+    const inkX = (xs[0] + xs[xs.length - 1] + adv) / 2 + (card.labelDx ?? 0);
+    const inkY = card.text.y.length > 1 ? (card.text.y[0] + card.text.y[card.text.y.length - 1]) / 2 : card.text.y[0];
+    const m = card.text.matrix;
+    const cx = m ? m[0] * inkX + m[2] * inkY : inkX;
+    return { x: cx + (card.iconDx ?? 0) - size / 2, y: 30, size };
+  })();
+  const labelDx = card.labelDx ?? 0;
   return (
     <div
       className="ef-card-shadow"
@@ -137,9 +158,15 @@ function CardMarkup({ card, i, onAction }: { card: CardSpec; i: number; onAction
           </svg>
           <svg className="ef-card__art" {...box} aria-hidden="true">
             {card.noted ? <use href={`#${card.art}-ring`} fill="#FDEF00" /> : null}
-            <use href={`#${card.art}`} />
+            {iconBox
+              ? <use href={`#${card.art}`} x={iconBox.x} y={iconBox.y} width={iconBox.size} height={iconBox.size} />
+              : <use href={`#${card.art}`} />}
             {card.sheen ? <use href={`#${card.art}-sheen`} fill="#575757" /> : null}
-            <text {...labelText(card.text)}>{card.label}</text>
+            <text
+              {...labelText(labelDx ? { ...card.text, x: card.text.x.map((v) => v + labelDx) } : card.text)}
+            >
+              {card.label}
+            </text>
           </svg>
         </span>
         <svg className="ef-card__ring" {...box}>

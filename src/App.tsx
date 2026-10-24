@@ -3,6 +3,7 @@ import { MENU_CONTENT, dialogFor } from "./config/menu-content";
 import { MenuActionsContext } from "./menu-actions";
 import { SceneLayer, SceneProvider, useScene, type SceneApi } from "./scene/scene-context";
 import { SpriteDefs } from "./components/sprite-defs";
+import { SiteIconDefs } from "./components/icon-defs";
 import { BackdropDecor, Wallpaper } from "./components/backdrop";
 import { Disc } from "./components/disc";
 import { TransitionSkeleton } from "./components/transition-skeleton";
@@ -93,6 +94,7 @@ export default function App() {
   return (
     <MenuActionsContext.Provider value={actions}>
       <SpriteDefs />
+      <SiteIconDefs />
       <Wallpaper ref={wallpaperRef} />
       <div className="ef-overlay" id="efMenu" onClick={onOverlayClick}>
         <div className="ef-stage" ref={stageRef} data-paused={paused ? "true" : "false"}>

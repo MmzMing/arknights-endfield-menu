@@ -152,6 +152,24 @@
 .ef-idlg__chips i:nth-child(1) { background: var(--ef-yellow); }
 .ef-idlg__chips i:nth-child(2) { background: #ff6fe0; }
 .ef-idlg__chips i:nth-child(3) { background: #3fe0d8; }
+
+/* ---- 站点入口弹窗扩展：封面媒体块（圆角边框）+ 地址行末尾的跳转图标按钮。 ---- */
+.ef-idlg__media { margin: 14px 0 0; border: 1px solid rgba(16,18,13,0.62); border-radius: 12px; background: #10120d; overflow: hidden; }
+.ef-idlg__media img { display: block; width: 100%; height: auto; max-height: 370px; object-fit: contain; }
+.ef-idlg__jump {
+  display: flex; align-items: center; justify-content: center; width: 34px; height: 34px;
+  border: 1px solid #10120d; border-radius: 50%; background: #10120d; color: #f2f1e9;
+  cursor: pointer; transition: background-color 0.12s, color 0.12s;
+}
+.ef-idlg__jump svg { width: 15px; height: 15px; fill: none; stroke: currentColor; stroke-width: 2.6; stroke-linecap: round; stroke-linejoin: round; }
+.ef-idlg__jump:hover, .ef-idlg__jump:focus-visible { background: var(--ef-yellow); color: #10120d; }
+.ef-idlg__row:has(.ef-idlg__jump) { grid-template-columns: 122px minmax(30px, 1fr) minmax(104px, auto) auto; }
+@media (max-width: 720px) {
+  .ef-idlg__media img { max-height: 150px; }
+  .ef-idlg__row:has(.ef-idlg__jump) { grid-template-columns: 1fr auto auto; }
+  .ef-idlg__jump { width: 28px; height: 28px; }
+  .ef-idlg__jump svg { width: 13px; height: 13px; }
+}
 @media (max-width: 900px) {
   .ef-idlg__panel { width: min(100vw - 40px, 820px); }
   .ef-idlg__brandline { font-size: 74px; }

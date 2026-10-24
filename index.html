@@ -2,10 +2,21 @@
 <html lang="zh-CN">
 <head>
 <meta charset="UTF-8" />
-<link rel="icon" type="image/svg+xml" href="/favicon.svg" />
+<!-- Favicon set: every file under public/favicon/ is wired here (android-chrome sizes live in site.webmanifest).
+     Vite rewrites the root-absolute hrefs with the deploy base at build time. -->
+<link rel="icon" type="image/svg+xml" href="/favicon/favicon.svg" />
+<link rel="icon" type="image/png" sizes="48x48" href="/favicon/favicon-48x48.png" />
+<link rel="icon" type="image/png" sizes="32x32" href="/favicon/favicon-32x32.png" />
+<link rel="icon" type="image/png" sizes="16x16" href="/favicon/favicon-16x16.png" />
+<link rel="icon" href="/favicon/favicon.ico" sizes="any" />
+<link rel="mask-icon" href="/favicon/safari-pinned-tab.svg" color="#48395E" />
+<link rel="apple-touch-icon" sizes="152x152" href="/favicon/apple-touch-icon-152x152.png" />
+<link rel="apple-touch-icon" sizes="167x167" href="/favicon/apple-touch-icon-167x167.png" />
+<link rel="apple-touch-icon" sizes="180x180" href="/favicon/apple-touch-icon-180x180.png" />
+<link rel="apple-touch-icon" href="/favicon/apple-touch-icon.png" />
+<link rel="manifest" href="/site.webmanifest" />
 <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-<title>Endfield Menu</title>
-<meta name="description" content="Arknights: Endfield main menu, pixel-perfect fan recreation. React 19 + Vite 8 + TypeScript." />
+<!-- SEO 标签（title/description/keywords/og/JSON-LD）由 vite.config.ts 的注入插件从 src/config/site-config.ts 生成，勿在此手写 -->
 </head>
 <body>
 <div id="root"></div>

@@ -114,3 +114,18 @@ body.ef-out .ef-overlay { pointer-events: none; }
 @keyframes efFadeOut { to { opacity: 0; } }
 @keyframes efBackdropOut { to { background-color: transparent; } }
 @keyframes efWallBlurOut { to { filter: none; } }
+
+/* ---- Custom cursor theme (public/mouse, a Windows .cur/.ani set) ----
+   Overrides for every cursor state the menu uses. Each selector is prefixed with `body` so it out-ranks the
+   migrated rules in the component stylesheets regardless of bundle order (index.css lands before those files).
+   The .cur files carry their own hotspots, so no x/y offsets are given. .ani is Windows-only: Chromium can't
+   decode it and falls to the keyword fallback, Firefox plays the animation. */
+body { cursor: url("/mouse/pointer.cur"), auto; }
+body button, body .ef-card::before, body .ef-news__frame, body .ef-news__bar, body .ef-power,
+body .ef-rtile, body .ef-discbtn {
+  cursor: url("/mouse/link.cur"), pointer;
+}
+body .ef-lvl__info { cursor: url("/mouse/help.cur"), help; }
+body .ef-right__viewport { cursor: url("/mouse/move.cur"), grab; }
+body .ef-news__body.is-drag, body .ef-right__viewport.is-drag { cursor: url("/mouse/move.cur"), grabbing; }
+body input, body textarea, body select { cursor: url("/mouse/text.cur"), text; }

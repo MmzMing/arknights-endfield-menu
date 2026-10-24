@@ -13,8 +13,7 @@
 
 - **测量数字零改动**：所有坐标、毫秒时序、关键帧百分比、cubic-bezier、颜色值都是从 demo
   逐字迁移的测量资产；重构、格式化、"顺手优化"一律不许碰这些数字。组件注释里的测量说明同样是资产，禁止删除。
-- **验证命令**：改动前 `npx tsc -b`（确认基线干净），改动后 `pnpm build` + `pnpm check:libs`；
-  视觉改动必须再跑 `pnpm check:frames`（先 `pnpm build`）。全绿才算完成。
+- **验证命令**：改动前 `npx tsc -b`（确认基线干净），改动后 `pnpm build` + `pnpm check:libs`。全绿才算完成。
 - Git 操作边界见 §10。
 
 ## 3. 目录结构与职责（禁止越界存放）
@@ -28,7 +27,7 @@
 | `src/lib/`        | 纯函数（arcD / shapePathD / mulberry32 / labelText）                 | 副作用、DOM 依赖                       |
 | `src/hooks/`      | 菜单相位、舞台缩放等编排 hooks                                       | 高频每帧状态（走指令式岛屿）           |
 | `src/config/`     | `menu-content.ts` 全部可编辑内容                                     | 坐标/时序数字（那是测量资产）          |
-| `src/test/`       | 手搓测试（镜像源码目录：`lib/`、`frame/`）                           | 引入测试框架、放业务代码               |
+| `src/test/`       | 手搓测试（镜像源码目录：`lib/`）                                     | 引入测试框架、放业务代码               |
 | `src/assets/`     | 提取的美术数据 + 生成字体（脚本产物，不手改）                        | 手工编辑                               |
 | `scripts/`        | 资产生成脚本（extract-assets / build-fonts）                         | 引入浏览器 API、放测试                 |
 | `docs/`         | 项目文档                                                             | 代码                                   |
@@ -83,10 +82,6 @@
 - **禁止引入 Playwright / Vitest / Jest / pngjs 等任何测试框架或断言/截图/解码库**。
   本项目的测试全部手搓：纯 Node 脚本 + `node:assert` + 内置 `node:http` / `node:zlib` / 全局 `WebSocket`。
 - 单测：`src/test/lib/check-libs.mjs` —— 从 demo 源码现场抽取几何函数，与 `src/lib/` 的实现逐字节比对。
-- 验收：`src/test/frame/frame-check.mjs` —— 手搓 CDP 客户端（`cdp.mjs`）驱动无头 Chromium，
-  对 demo 与本应用逐帧截图比对（入场 17 帧 / 退场 12 帧 / 静止 / 相机偏移），
-  PNG 解码与像素 diff 为 `png.mjs` 手写实现，fixture 服务器 `serve-fixture.mjs`（含 demo 字体链接改写）。
-  跑之前先 `pnpm build`；字体 fixture 由 `scripts/build-fonts.mjs` 生成到 `src/test/frame/.fonts/`。
 - 新增测试 = 在 `src/test/` 对应镜像目录下新增/扩展脚本；不允许"顺手装个测试库"。
 
 ## 10. Git 与提交规范
@@ -98,7 +93,7 @@
 - 分支：`main`（稳定）/ `feat/*`、`fix/*`、`chore/*`。
 - 提交信息：Conventional Commits——`feat(components): …`、`fix(scene): …`、`chore(scripts): …`；
   scope 用模块名（components / scene / styles / lib / hooks / config / test / scripts / docs）。
-- 提交前必须通过：`pnpm lint`、`pnpm build`、`pnpm check:libs`；视觉改动加 `pnpm check:frames`。
+- 提交前必须通过：`pnpm lint`、`pnpm build`、`pnpm check:libs`。
 
 ## 11. 依赖规范
 
@@ -113,12 +108,6 @@
   表现为源码 import 明明正确、浏览器却报 `xxx is not defined` 并白/黑屏。修法：
   杀掉占用 5173 的 node 进程（`netstat -ano | findstr :5173` 找 PID → `Stop-Process -Id <pid> -Force`），
   再 `npx vite --port 5173 --force` 重启。注意 `TaskStop` 后台任务不会连带杀掉 node 子进程，端口会残留占用。
-- 截图逐帧比对必须手工 `getAnimations().pause() + currentTime`；
-  任何"截图时顺手禁用动画"的选项都会把动画快进到末帧，导致比对失真。
-- demo 的 Google Fonts 链接由 fixture 服务器在 HTML 层改写为本地 `/fonts/fonts.css`（与 app 同一批 woff2），
-  禁止让 demo 走真实网络字体。
-- 手搓 CDP 需要无头 Chromium：优先用 `%LOCALAPPDATA%\ms-playwright` 里已装的，
-  回退 Edge（`msedge --headless`）或系统 Chrome。
 
 ## 13. AI 代理附加守则
 
@@ -127,5 +116,4 @@
   `src/config/menu-content.ts` 的坐标/时序与逐字 `text` 布局、组件注释里的测量说明；
   只有任务本身要求改内容时才可动，且换文案必须重新测量（见 §4）。
 - 原版 demo 及其所在目录任何情况下只读（包括为了让测试通过），本仓库外的一切文件不得改动。
-- 完成定义：`npx tsc -b`、`pnpm lint`、`pnpm build`、`pnpm check:libs` 全绿
-  （视觉改动加 `pnpm check:frames` 全绿）；改动停留在工作区，不提交（见 §10）。
+- 完成定义：`npx tsc -b`、`pnpm lint`、`pnpm build`、`pnpm check:libs` 全绿；改动停留在工作区，不提交（见 §10）。

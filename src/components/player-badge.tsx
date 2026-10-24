@@ -7,6 +7,8 @@ import "../styles/player-badge.css";
 
 export interface PlayerContent {
   avatarLabel: string;
+  /** 作者头像图（站点级配置，见 src/config/site-config.ts）；缺省时渲染 avatarLabel 占位框 */
+  avatar?: string;
   name: string;
   sub: string;
   level: string;
@@ -30,7 +32,9 @@ export function PlayerBadge({ content }: { content: PlayerContent }) {
       <div className="ef-badge__rim" />
       <div className="ef-badge__inner">
         <div className="ef-badge__avatar">
-          {content.avatarLabel}
+          {content.avatar
+            ? <img src={`${import.meta.env.BASE_URL}${content.avatar.replace(/^\//, "")}`} alt={content.avatarLabel} />
+            : content.avatarLabel}
           <i className="ef-badge__scan" />
           <i className="ef-badge__chip" />
         </div>

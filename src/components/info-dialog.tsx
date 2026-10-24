@@ -69,6 +69,11 @@ function DialogFace({ content, isStatic }: { content: DialogContent; isStatic: b
           </div>
         </div>
         <p className="ef-idlg__body">{content.description}</p>
+        {content.image && (
+          <div className="ef-idlg__media">
+            <img src={content.image} alt={content.subtitle} />
+          </div>
+        )}
         {content.meta.length > 0 && (
           <div className="ef-idlg__meta">
             {content.meta.map((row) => (
@@ -76,6 +81,18 @@ function DialogFace({ content, isStatic }: { content: DialogContent; isStatic: b
                 <b>{row.label}</b>
                 <i />
                 <span className="ef-idlg__value">{row.value}</span>
+                {row.href && (
+                  <button
+                    className="ef-idlg__jump"
+                    title="打开链接"
+                    aria-label="打开链接"
+                    onClick={() => window.open(row.href, "_blank", "noopener,noreferrer")}
+                  >
+                    <svg viewBox="0 0 24 24" aria-hidden="true">
+                      <path d="M7 17L17 7M9 7h8v8" />
+                    </svg>
+                  </button>
+                )}
               </div>
             ))}
           </div>
@@ -113,6 +130,12 @@ export function InfoDialog({
   const [bandCount] = useState(() =>
     window.matchMedia("(max-width: 720px)").matches ? 1 : BAND_COUNT,
   );
+  // 站点入口弹窗带封面媒体块：卡片按内容加高（视口封顶），桌面端以 inline style 覆盖固定高度；
+  // 窄屏走 CSS 的内容自适应高度，不加 inline。揭示动画的行高在挂载时实测，随卡片高度自适应。
+  const cardHeight = content.image
+    ? Math.min(780, Math.round((window.innerHeight - 48) / 0.72))
+    : 520;
+  const panelHeight = Math.round(cardHeight * 0.72);
 
   useEffect(() => {
     onCloseRef.current = onClose;
@@ -324,8 +347,11 @@ export function InfoDialog({
         </defs>
       </svg>
       <div className="ef-idlg__frame">
-        <div className="ef-idlg__panel">
-          <div className="ef-idlg__card" ref={cardRef}>
+        <div
+          className="ef-idlg__panel"
+          style={bandCount === 1 ? undefined : { height: panelHeight }}
+        >
+          <div className="ef-idlg__card" ref={cardRef} style={bandCount === 1 ? undefined : { height: cardHeight }}>
             <div className="ef-idlg__shape">
               <div className="ef-idlg__rim" aria-hidden="true" />
               {Array.from({ length: bandCount }, (_, k) => (

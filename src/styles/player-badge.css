@@ -105,3 +105,12 @@
 }
 @keyframes efBadgeOut { from { opacity: 1; } to { opacity: 0; } }
 @keyframes efBadgeDrop { from { translate: 0px 0px; } to { translate: 5.3px 9.3px; } }
+
+/* Author avatar (site config): fills the placeholder box; the scan strip, chip and corner brackets stay on top. */
+.ef-badge__avatar img {
+  position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover;
+}
+
+/* The profession line runs past the demo's placeholder width; keep it on one line — it ends inside the
+   gap before the permission text instead of wrapping into the level row. */
+.ef-badge__sub { white-space: nowrap; }

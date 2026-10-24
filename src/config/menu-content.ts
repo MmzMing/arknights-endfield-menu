@@ -4,6 +4,9 @@ import type { PlayerContent } from "../components/player-badge";
 import type { CardSpec } from "../components/left-cards";
 import type { TileSpec } from "../components/right-tiles";
 import type { NewsSlide } from "../components/news-panel";
+import type { LabelLayout } from "../lib/label-svg";
+import { PLAYER_CONFIG } from "./player-config";
+import { SITE_LINKS } from "./link-config";
 
 /* All editable content of the menu in one typed module. Coordinates and timings are NOT content — they are
    measured assets and live inside the components. The per-glyph `text` layouts are measured against the exact
@@ -12,6 +15,8 @@ import type { NewsSlide } from "../components/news-panel";
 export interface DialogMetaRow {
   label: string;
   value: string;
+  /** 设置后该行末尾渲染跳转图标按钮（新标签页打开） */
+  href?: string;
 }
 
 export interface DialogContent {
@@ -19,6 +24,8 @@ export interface DialogContent {
   subtitle: string;
   description: string;
   meta: DialogMetaRow[];
+  /** 站点入口弹窗扩展：封面图（描述后的媒体块） */
+  image?: string;
 }
 
 export interface MenuContent {
@@ -37,16 +44,30 @@ const dialog = (title: string, subtitle: string, description: string, meta: Dial
   title, subtitle, description, meta,
 });
 
+/** 左侧四卡的逐字文案布局，顺序与 SITE_LINKS 一一对应（博客 / memos / 统计 / 工具盒子）。
+    labelDx / iconDx 为用户指定的光学微调（负值左移），补偿图标墨迹重心与文字矩阵渲染偏移。 */
+const CARD_TEXT: LabelLayout[] = [
+  // 博客 ← 原「干员」的实测布局（同为 2 字）
+  { size: 22.62, matrix: [1.0392, -0.0417, -0.0168, 1.0015], x: [203.11, 226.39], y: [145.07, 145.3] },
+  // memos ← canvas 实测合成的拉丁布局（原「活动」卡的字号/矩阵/中心/斜率，见上方 leftCards 注释）
+  { size: 24.07, matrix: [0.9983, -0.0576, -0.0123, 1.0024], x: [198.07, 220.89, 234.58, 257.4, 272.25], y: [148.37, 148.91, 149.24, 149.78, 150.13] },
+  // 统计 ← 原「寻访」的实测布局（同为 2 字）
+  { size: 24.2, matrix: [1.0678, -0.0186, 0.0015, 1.0001], x: [202.57, 224.93], y: [147.04, 146.12] },
+  // 工具盒子 ← 原「采购中心」的实测布局（同为 4 字）
+  { size: 24.52, matrix: [0.9796, -0.0274, -0.0261, 1.0011], x: [193.01, 218.59, 243.56, 268.83], y: [132.78, 132.55, 133.08, 132.58] },
+];
+
+/** 与 CARD_TEXT 对齐的每卡光学微调（px）：labelDx 平移文字，iconDx 在矩阵对齐基础上补偿图标墨迹重心
+    与用户目测偏好（博客图标持续偏左 → 累计 +18；工具盒子标签按用户指向 +6）。 */
+const CARD_NUDGE: Pick<CardSpec, "labelDx" | "iconDx">[] = [
+  { labelDx: -6, iconDx: 21 },
+  {},
+  {},
+  { labelDx: 15, iconDx: -15 },
+];
+
 export const MENU_CONTENT: MenuContent = {
-  player: {
-    avatarLabel: "avatar",
-    name: "xxxxx",
-    sub: "[ X · · · ]",
-    level: "60",
-    uid: "UID:xxxxx",
-    permLabel: "权限等阶",
-    permTier: "满级",
-  },
+  player: PLAYER_CONFIG,
   topBar: {
     currencyA: "355",
     currencyB: "123040",
@@ -63,24 +84,18 @@ export const MENU_CONTENT: MenuContent = {
       { caption: "终末地补给 · 限时供应", c1: "#5c5420", c2: "#1d1a0b" },
     ],
   },
-  leftCards: [
-    {
-      action: "operators", label: "干员", art: "art-card-operators",
-      text: { size: 22.62, matrix: [1.0392, -0.0417, -0.0168, 1.0015], x: [203.11, 226.39], y: [145.07, 145.3] },
-    },
-    {
-      action: "events", label: "活动", art: "art-card-events",
-      text: { size: 24.07, matrix: [0.9983, -0.0576, -0.0123, 1.0024], x: [216.09, 240.97], y: [148.8, 149.39] },
-    },
-    {
-      action: "headhunt", label: "寻访", art: "art-card-headhunt", noted: true, sheen: true,
-      text: { size: 24.2, matrix: [1.0678, -0.0186, 0.0015, 1.0001], x: [202.57, 224.93], y: [147.04, 146.12] },
-    },
-    {
-      action: "shop", label: "采购中心", art: "art-card-shop",
-      text: { size: 24.52, matrix: [0.9796, -0.0274, -0.0261, 1.0011], x: [193.01, 218.59, 243.56, 268.83], y: [132.78, 132.55, 133.08, 132.58] },
-    },
-  ],
+  /* 左侧四张卡 = 四个兄弟站点入口：标题/地址/图标来自 SITE_LINKS，点击走弹窗展示介绍/地址/封面图。
+     text 是逐字符 origin 的实测资产：「博客/统计/工具盒子」逐字复用原同字数文案（干员/寻访/采购中心）的
+     实测布局；「memos」为拉丁串，逐字 advance 由 canvas 实测（Noto Sans SC 550 @ 24.07px：m 22.82、
+     e 13.70、o 14.85、s 11.63），ink 中心对齐原「活动」卡的实测中心 240.97，y 沿其 0.0237/px 的实测斜率
+     线性延伸。 */
+  leftCards: SITE_LINKS.map((link, i): CardSpec => ({
+    action: link.id,
+    label: link.title,
+    art: `si-${link.icon}`,
+    text: CARD_TEXT[i],
+    ...CARD_NUDGE[i],
+  })),
   rightTiles: [
     { id: "handbook", label: "行动手册", art: "art-tile-handbook",
       text: { size: 22.1, matrix: [1.003, -0.0018, -0.0043, 1], x: [9.07, 31.66, 54.16, 76.9], y: [91.43, 91.41, 91.7, 91] } },
@@ -119,20 +134,18 @@ export const MENU_CONTENT: MenuContent = {
     { id: "tools", label: "游戏工具", art: "art-tile-tools",
       text: { size: 22.26, matrix: [1.01, -0.0071, -0.003, 1], x: [8.58, 30.87, 53.3, 75.65], y: [91.25, 91.28, 91.55, 91.65] } },
   ],
-  net: { delay: "82ms", uid: "xxxxx" },
+  net: { delay: "82ms", uid: "114514" },
   dialogs: {
-    operators: dialog("OPERATORS", "干员", "查看并管理你签署的干员队伍，配置技能与装备，准备迎接塔卫的每一次行动。", [
-      { label: "编制", value: "—" }, { label: "状态", value: "待命" },
-    ]),
-    events: dialog("EVENTS", "活动", "进行中与即将开启的限时活动一览。完成活动任务可获得丰厚补给。", [
-      { label: "当前", value: "进行中" }, { label: "剩余", value: "—" },
-    ]),
-    headhunt: dialog("HEADHUNT", "寻访", "使用寻访凭证扩充你的干员阵容。新的相遇，或许就在下一次。", [
-      { label: "凭证", value: "—" }, { label: "保底", value: "—" },
-    ]),
-    shop: dialog("SHOP", "采购中心", "塔卫物资的交易枢纽：补给、凭证与限定商品均可在此兑换。", [
-      { label: "货币", value: "—" }, { label: "刷新", value: "每日 04:00" },
-    ]),
+    /* 四个站点入口的弹窗从 SITE_LINKS 生成：标题 = 站点 id 大写，地址作为 meta 行并带跳转按钮。 */
+    ...Object.fromEntries(
+      SITE_LINKS.map((link): [string, DialogContent] => [link.id, {
+        title: link.id.toUpperCase(),
+        subtitle: link.title,
+        description: link.description,
+        meta: [{ label: "地址", value: link.url, href: link.url }],
+        image: link.image,
+      }]),
+    ),
     plan: dialog("INDUSTRIAL PLAN", "工业计划", "规划塔卫工业区的生产线与资源调度，让每一份原料都物尽其用。", [
       { label: "产能", value: "—" }, { label: "队列", value: "—" },
     ]),
