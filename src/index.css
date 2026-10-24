@@ -35,9 +35,9 @@ button { font: inherit; border: 0; background: none; cursor: pointer; color: inh
   background: var(--ef-orange); box-shadow: 0 0 0 2.5px rgba(16,18,20,0.85);
 }
 
-/* Background: the game world's blurred colours as a smooth colour field (backdrop-field.ts, painted by backdrop). */
-.ef-wallpaper { position: fixed; inset: 0; z-index: 0; background: #1d2425; }
-body:not(.ef-closed) .ef-wallpaper { filter: blur(6px); }
+/* Background: a flat paper tone with a technical contour overlay. */
+.ef-wallpaper { position: fixed; inset: 0; z-index: 0; background: #E7E7E2; }
+body:not(.ef-closed) .ef-wallpaper { filter: none; }
 
 .ef-overlay { position: fixed; inset: 0; z-index: 10; background: var(--ef-dim); }
 /* The 0.25 s fade belongs to the closed state only: closing fades through it, while reopening shows the overlay at once

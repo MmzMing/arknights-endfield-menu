@@ -11,7 +11,7 @@ import "../styles/dial-rings.css";
 
 function RimBand() {
   const annulus = "M500 -177 A677 677 0 1 0 500.01 -177 Z M500 -70 A570 570 0 1 1 499.99 -70 Z";
-  return <path d={annulus} fillRule="evenodd" fill="#0e1012" opacity={0.97} />;
+  return <path d={annulus} fillRule="evenodd" fill="#0e1012" opacity={0.72} />;
 }
 
 function AmberRing() {
@@ -31,6 +31,20 @@ function Grooves() {
     <>
       {[472, 476, 480, 484].map((r, i) => (
         <circle key={r} cx={500} cy={500} r={r} fill="none" stroke={`rgba(255,255,255,${i % 2 ? 0.05 : 0.08})`} strokeWidth={0.75} />
+      ))}
+    </>
+  );
+}
+
+function GoldArcs() {
+  const segments: [number, number][] = [[163, 191], [343, 371]];
+  return (
+    <>
+      {segments.map(([start, end]) => (
+        <g key={start}>
+          <path d={arcD(500, 500, 450, start, end)} fill="none" stroke="rgba(255,222,0,0.08)" strokeWidth={12} strokeLinecap="square" />
+          <path d={arcD(500, 500, 450, start, end)} fill="none" stroke="rgba(255,222,0,0.48)" strokeWidth={5} strokeLinecap="square" />
+        </g>
       ))}
     </>
   );
@@ -64,6 +78,7 @@ const RINGS: { id: string; h: number; draw: () => React.ReactNode }[] = [
   { id: "rim-band", h: -112, draw: RimBand },
   { id: "amber-ring", h: -60, draw: AmberRing },
   { id: "grooves", h: 10, draw: Grooves },
+  { id: "gold-arcs", h: 44, draw: GoldArcs },
   { id: "white-arcs", h: 50, draw: WhiteArcs },
 ];
 const FLAG_ANGLES = [-101, -162, -37, 29, 141];
@@ -119,7 +134,11 @@ export function DialRings() {
           viewBox="0 0 1000 1000"
           ref={(el) => { ringRefs.current[i] = el; }}
         >
-          <g className="ef-dial__ink">{ring.draw()}</g>
+          <g className="ef-dial__ink">
+            {ring.id === "gold-arcs" ? (
+              <g className={`ef-dial__orbit ef-dial__orbit--${ring.id}`}>{ring.draw()}</g>
+            ) : ring.draw()}
+          </g>
         </svg>
       ))}
       <Flags flagsRef={flagsRef} />

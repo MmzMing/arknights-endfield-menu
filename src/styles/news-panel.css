@@ -20,13 +20,21 @@
   -webkit-mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0);
   -webkit-mask-composite: xor; mask-composite: exclude;
 }
-.ef-news__frame:hover {
+/* The lift is anchored on the steady .ef-news box rather than on the frame itself: hovering the frame and then
+   moving it up slides its own bottom edge out from under the pointer, which drops the hover, which brings it back —
+   the frame flickers. .ef-news never moves, so the hit area does not follow the lift. */
+.ef-news:hover .ef-news__frame {
   transform: translateY(-2px);
   --ef-shx0: 10; --ef-shy0: 15; --ef-h: 24;
   box-shadow: calc((var(--ef-shx0) + var(--ef-swx, 0) * var(--ef-h)) * 1px)
               calc((var(--ef-shy0) + var(--ef-swy, 0) * var(--ef-h)) * 1px)
               0 rgba(0,0,0,0.34), 1px 2px 0 rgba(0,0,0,0.14);
 }
+/* The same feedback loop, one octave up: the page bars hang 8.3 px below the frame's box and are only 4 px tall,
+   so lifting them with the frame slides them off the pointer and back again. They keep their place instead; the
+   counter-translate is the frame's lift undone in the same coordinate space, with the frame's own timing so the
+   two stay in step. */
+.ef-news:hover .ef-news__bars { transform: translateY(2px); }
 .ef-news__head {
   position: absolute; top: -19.2px; left: -0.8px; width: 132.5px; height: 15.9px; padding: 0 3.5px 0 6px; box-sizing: border-box;
   background: #92080A; color: #e7eeee; display: flex; align-items: center; justify-content: space-between;
@@ -34,14 +42,15 @@
   box-shadow: 0 2px 6px rgba(0,0,0,0.4);
 }
 .ef-news__head svg { flex: none; width: 7px; height: 8.75px; }
-.ef-news__body { position: absolute; inset: 14.4px 12.2px 14.5px 13.2px; overflow: hidden; background: #0a0c0d; }
+.ef-news__body { position: absolute; inset: 14.4px 12.2px 14.5px 13.2px; overflow: hidden; background: #0a0c0d; touch-action: none; }
+.ef-news__body.is-drag { cursor: grabbing; }
 .ef-news__img {
   position: absolute; inset: 0; display: flex; align-items: flex-end; padding: 8px 12px;
   font-family: var(--ef-font-mono); font-size: 12px; letter-spacing: 0.32em; color: rgba(255,255,255,0.92);
   text-shadow: 0 1px 3px rgba(0,0,0,0.8); white-space: nowrap; overflow: hidden;
 }
 /* Page bars: one per slide, in a row under the image. */
-.ef-news__bars { position: absolute; left: 34.2px; right: 12.8px; top: calc(100% + 8.3px); display: flex; gap: 8.7px; align-items: center; }
+.ef-news__bars { position: absolute; left: 34.2px; right: 12.8px; top: calc(100% + 8.3px); display: flex; gap: 8.7px; align-items: center; transition: transform 0.18s; }
 .ef-news__bar { height: 4px; flex: 1; background: rgba(255,255,255,0.55); cursor: pointer; transition: background 0.2s; }
 .ef-news__bar.is-on { background: #FFF200; }
 

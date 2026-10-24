@@ -4,6 +4,19 @@
 .ef-decor { width: 1920px; height: 1080px; }
 .ef-decor__item { width: 0; height: 0; }
 .ef-decor__art { position: absolute; overflow: visible; }
+/* The floor's arcs and strips slide round the disc. The rotation lives on this flat group inside the svg: the item
+   carrying the svg is placed in 3D by its own translate / scale (see the entrance below), and a transform on the
+   item would fight that. */
+.ef-decor__orbit { transform-box: view-box; transform-origin: 960px 540px; }
+
+.ef-topography {
+  position: fixed; inset: 0; z-index: 1; width: 100%; height: 100%; pointer-events: none;
+}
+.ef-topography__accent { opacity: 0.92; }
+.ef-topography__marks { opacity: 0.48; }
+body:not(.ef-closed) .ef-topography__accent { opacity: 0.42; }
+body:not(.ef-closed) .ef-topography__contours { opacity: 0.62; }
+body:not(.ef-closed) .ef-topography__marks { opacity: 0.3; }
 
 /* Open and close: the floor and the yellow ring ride in with the disc's outer ring, the "+" marks gather in (times in
    this page's timeline, see index.css). The items and their container are preserve-3d, where opacity would flatten
@@ -20,8 +33,12 @@
    The rules name the svgs and the floor's paths by class: a bare "svg" or "path" would make every body.ef-in and
    body.ef-out toggle restyle every svg or path of the page. */
 @media (prefers-reduced-motion: no-preference) {
+  /* one slow turn against the disc's own gold strips, so the two layers read apart */
+  .ef-decor__orbit { animation: efDecorSpin 180s linear infinite reverse; }
   body.ef-in .ef-decor__item:nth-child(-n+2) { animation: efDecorRideIn 295ms 255ms linear both; }
   body.ef-in .ef-decor__stroke { animation: efDecorFlash 195ms 255ms linear both; }
+  /* the strips come in on the same beat and settle on their own fill / stroke opacity */
+  body.ef-in .ef-decor__strip { animation: efDecorStripIn 195ms 255ms linear both; }
   body.ef-in .ef-decor__item:nth-child(2) > .ef-decor__art { animation: efDecorRingIn 195ms 255ms linear both; }
   body.ef-in .ef-decor__item:nth-child(n+3) { animation: efDecorMarkIn 90ms 310ms cubic-bezier(.333,0,.667,1) both; }
   body.ef-in .ef-decor__item:nth-child(n+3) > .ef-decor__art { animation: efFade 40ms 310ms cubic-bezier(.333,0,.667,1) both; }
@@ -31,6 +48,7 @@
   body.ef-out .ef-decor__item:nth-child(n+3) { animation: efDecorMarkImplode 240ms 50ms linear both; }
   body.ef-out .ef-decor__item:nth-child(n+3) > .ef-decor__art { animation: efDecorMarkOut 240ms 50ms linear both; }
 }
+@keyframes efDecorSpin { to { transform: rotate(360deg); } }
 @keyframes efDecorRideIn {
   0% { translate: 355.2px 199.8px 0px; scale: 0.63 0.63 0.63; }
   13.56% { translate: 278.4px 156.6px 0px; scale: 0.71 0.71 0.71; }
@@ -45,6 +63,7 @@
 }
 /* no last keyframe: each path ends on its own stroke-opacity */
 @keyframes efDecorFlash { 0% { stroke-opacity: 0; } 7.69% { stroke-opacity: 0.106; } 20.51% { stroke-opacity: 0.336; } 23.08% { stroke-opacity: 0.333; } 33.33% { stroke-opacity: 0.29; } 48.72% { stroke-opacity: 0.203; } 58.97% { stroke-opacity: 0.175; } 74.36% { stroke-opacity: 0.154; } 84.62% { stroke-opacity: 0.146; } }
+@keyframes efDecorStripIn { 0% { opacity: 0; } 23.08% { opacity: 1; } }
 @keyframes efDecorRingIn { 0% { opacity: 0; scale: 0.58 0.3; } 8.56% { opacity: 1; } 23.08% { scale: 0.65 0.4; } 48.72% { scale: 0.75 0.62; } 74.36% { scale: 0.93 0.86; } 100% { opacity: 1; scale: 1 1; } }
 @keyframes efDecorMarkIn { 0%, 44.44% { translate: 57.6px 32.4px 0px; scale: 0.94 0.94 0.94; } 100% { translate: 0px 0px 0px; scale: 1 1 1; } }
 @keyframes efDecorRideOut {

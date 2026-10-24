@@ -16,7 +16,7 @@ import { TopBar } from "./components/top-bar";
 import { NewsBelt, NewsPanel } from "./components/news-panel";
 import { PlayerBadge } from "./components/player-badge";
 import { CloseButton, Hud, NetInfo } from "./components/hud";
-import { InfoDialog, type DialogArt } from "./components/info-dialog";
+import { InfoDialog } from "./components/info-dialog";
 import { useMenuPhase } from "./hooks/use-menu-phase";
 import { useStageScale } from "./hooks/use-stage-scale";
 
@@ -33,18 +33,11 @@ function SceneBridge({ onScene }: { onScene: (api: SceneApi) => void }) {
   return null;
 }
 
-/** The traced artwork of the entry a dialog was opened for, when it has one (tiles redraw cleanly at any size;
-    cards and disc buttons draw in stage coordinates, so those fall back to the emblem). */
-function dialogArtFor(action: string): DialogArt | undefined {
-  const tile = MENU_CONTENT.rightTiles.find((t) => t.id === action);
-  if (tile) return { href: `#${tile.art}`, viewBox: "0 0 107 104" };
-  return undefined;
-}
-
 export default function App() {
   const content = MENU_CONTENT;
   const menu = useMenuPhase();
   const [dialog, setDialog] = useState<string | null>(null);
+  const closeDialog = useCallback(() => setDialog(null), []);
 
   const stageRef = useRef<HTMLDivElement>(null);
   const wallpaperRef = useRef<HTMLDivElement>(null);
@@ -73,14 +66,11 @@ export default function App() {
     [menu],
   );
 
-  // Escape: the dialog first, then the demo's toggle (close while open; reopen while closed or exiting)
+  // Escape: the dialog owns its exit timeline; otherwise keep the demo's menu toggle.
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
       if (e.key !== "Escape") return;
-      if (dialog !== null) {
-        setDialog(null);
-        return;
-      }
+      if (dialog !== null) return;
       if (menu.phase === "entering" || menu.phase === "open") menu.close();
       else if (menu.phase !== "boot") menu.open();
     };
@@ -105,7 +95,7 @@ export default function App() {
       <SpriteDefs />
       <Wallpaper ref={wallpaperRef} />
       <div className="ef-overlay" id="efMenu" onClick={onOverlayClick}>
-        <div className="ef-stage" ref={stageRef}>
+        <div className="ef-stage" ref={stageRef} data-paused={paused ? "true" : "false"}>
           <SceneProvider>
             <BackdropDecor />
             <SceneLayer name="deck">
@@ -113,7 +103,7 @@ export default function App() {
               <NewsBelt />
             </SceneLayer>
             <SceneLayer name="core">
-              <Disc>
+              <Disc paused={paused} entering={menu.phase === "entering"}>
                 <TransitionSkeleton />
                 <DialRings />
                 <LevelPill label={content.levelPill.label} level={content.levelPill.level} onAction={actions.onAction} />
@@ -150,7 +140,7 @@ export default function App() {
         <div className="ef-post__grade" />
       </div>
       {dialog !== null && (
-        <InfoDialog content={dialogFor(dialog, content)} art={dialogArtFor(dialog)} onClose={() => setDialog(null)} />
+        <InfoDialog content={dialogFor(dialog, content)} onClose={closeDialog} />
       )}
     </MenuActionsContext.Provider>
   );

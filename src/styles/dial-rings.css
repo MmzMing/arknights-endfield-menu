@@ -4,6 +4,7 @@
 /* each ring's drawing sits in one flat group (the transitions fade and scale it); the white arcs can be drawn out and
    back one segment at a time */
 .ef-dial__ink, .ef-dial__seg { transform-origin: 500px 500px; }
+.ef-dial__orbit { transform-box: view-box; transform-origin: 500px 500px; }
 
 .ef-core__flags { position: absolute; inset: 0; pointer-events: none; transform-style: preserve-3d; }
 .ef-flags-rot { position: absolute; inset: 0; transform-style: preserve-3d; }
@@ -14,8 +15,11 @@
 }
 @media (prefers-reduced-motion: no-preference) {
   .ef-flags-rot { animation: efDialSway 45s linear infinite alternate; }
+  .ef-dial__orbit--gold-arcs { animation: efDialOrbit 96s linear infinite; }
+  .ef-stage[data-paused="true"] .ef-dial__orbit { animation-play-state: paused; }
 }
 @keyframes efDialSway { from { transform: rotate(-30deg); } to { transform: rotate(30deg); } }
+@keyframes efDialOrbit { to { transform: rotate(360deg); } }
 
 /* Open and close (times in this page's timeline, see index.css). The ring svgs and the flags take part in the
    cylinder's 3D, so they only animate visibility and their own translate / rotate / scale; opacity and stroke drawing
@@ -23,6 +27,9 @@
 @media (prefers-reduced-motion: no-preference) {
   /* amber ring (the game's thin orange rim): comes with the disc, opacity 0 / .55 / .77 / .87 / 1 at 60 / 100 / 150 / 250 / 400 ms */
   body.ef-in [data-ring="amber-ring"] > .ef-dial__ink { animation: efDialAmberIn 340ms 60ms linear both; }
+  /* the rotating inner gold strips arrive with the white frame and leave before the disc takes the stage away */
+  body.ef-in [data-ring="gold-arcs"] > .ef-dial__ink { animation: efGoldArcsIn 160ms 360ms linear both; }
+  body.ef-out [data-ring="gold-arcs"] > .ef-dial__ink { animation: efGoldArcsOut 80ms 100ms linear both; }
   /* grooves (the game's olive inner arcs): fade in at 160-200 ms while growing from 0.9 (power1 out, 160-300 ms); on close
      they flash with the skeleton, out at 215-235 ms and back at 270-290 ms */
   body.ef-in [data-ring="grooves"] > .ef-dial__ink { animation: efDialGroovesIn 140ms 160ms linear both; }
@@ -54,6 +61,8 @@
   body.ef-out .ef-core__flags { animation: efDialFlagsBlink 55ms 225ms linear; }
 }
 @keyframes efDialAmberIn { 0% { opacity: 0; } 11.76% { opacity: 0.55; } 26.47% { opacity: 0.77; } 55.88% { opacity: 0.87; } 100% { opacity: 1; } }
+@keyframes efGoldArcsIn { from { opacity: 0; scale: 0.94; } to { opacity: 1; scale: 1; } }
+@keyframes efGoldArcsOut { from { opacity: 1; } to { opacity: 0; } }
 @keyframes efDialGroovesIn { 0% { opacity: 0; scale: 0.9; animation-timing-function: cubic-bezier(.333,.667,.667,1); } 28.57% { opacity: 1; } 100% { opacity: 1; scale: 1; } }
 @keyframes efDialGroovesOut { 0% { opacity: 1; } 26.67%, 73.33% { opacity: 0; } 100% { opacity: 1; } }
 @keyframes efDialBandIn { from { opacity: 0; } }
