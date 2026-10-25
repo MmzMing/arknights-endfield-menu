@@ -58,40 +58,52 @@
 }
 .ef-idlg__surface {
   position: relative; width: 100%; height: 100%; overflow: hidden; color: #11130e;
-  /* 顶部斜条带的高度；条带的两端按同角度斜切，斜条正好与卡片左上角的 58px 切角平行。 */
+  /* 顶部黄带高度；黄带只铺到顶部虚线（topline）的右端。 */
   --ef-idlg-band: 58px;
+  --ef-idlg-yellow: #f5f64b;
   background:
-    radial-gradient(circle at 1px 1px, rgba(12,14,10,0.12) 0.7px, transparent 0.85px) 0 0 / 5px 5px,
     linear-gradient(112deg, rgba(255,255,255,0.8), transparent 38%),
     #f1f0e9;
   clip-path: polygon(0 58px, 58px 0, calc(100% - 169px) 0, calc(100% - 148px) 14px, 100% 14px,
     100% 100%, 65px 100%, 0 calc(100% - 65px));
 }
-/* 顶部斜条带：135deg 的斜杠与卡片左上角切角同角度，只铺左半边；
-   两端用同角度的平行四边形裁掉，斜杠在端头被齐平地切断。 */
 .ef-idlg__toplines {
   position: absolute; inset: 0; z-index: 2; pointer-events: none;
 }
 .ef-idlg__toplines::before {
-  content: ""; position: absolute; left: 0; top: 0; width: 50%; height: var(--ef-idlg-band);
-  background: repeating-linear-gradient(135deg, var(--ef-yellow) 0 13px, transparent 13px 25px);
-  clip-path: polygon(var(--ef-idlg-band) 0, 100% 0, calc(100% - var(--ef-idlg-band)) 100%, 0 100%);
+  content: ""; position: absolute; inset: 0 0 auto 0; height: var(--ef-idlg-band);
+  background: var(--ef-idlg-yellow);
 }
-/* 斜条带下方的黑色横线：右端正好落在斜条带那道 45° 斜切的下端点之下，不与斜条贴着。 */
+/* 左侧黄块下探到黑线上沿，盖住黑块上方的空隙，形成黄块压住黑块的层次。 */
+.ef-idlg__toplines::after {
+  content: ""; position: absolute; left: 0; top: 0;
+  width: var(--ef-idlg-band); height: calc(var(--ef-idlg-band) + 14px);
+  background: var(--ef-idlg-yellow);
+}
+/* 黄条内的半截 ENDFIELD 虚线字：SVG 裁切到条高，只露出字母中段。 */
+.ef-idlg__topword {
+  position: absolute; z-index: 2; left: 0; top: 0; width: 100%; height: var(--ef-idlg-band);
+  overflow: hidden; pointer-events: none;
+}
+.ef-idlg__topword svg {
+  position: absolute; left: 0; top: -42px; display: block; width: 100%; height: 160px;
+}
+.ef-idlg__topword text {
+  font-family: var(--ef-font-en); font-size: 150px; font-weight: 700;
+}
+/* 顶部黑线：压左黄条的那一段保持实黑，进入白纸后转为斜线虚纹；线宽加粗。 */
 .ef-idlg__topline {
   position: absolute; z-index: 3; left: 0; top: calc(var(--ef-idlg-band) + 14px);
-  width: calc(50% - var(--ef-idlg-band)); height: 3px; background: #10120d;
+  width: calc(50% - var(--ef-idlg-band)); height: 6px;
+  background:
+    linear-gradient(#10120d, #10120d) 0 0 / var(--ef-idlg-band) 100% no-repeat,
+    repeating-linear-gradient(135deg, #10120d 0 2px, transparent 2px 6px);
 }
 .ef-idlg__contours {
   position: absolute; z-index: 1; left: 38%; right: 0; top: 0; bottom: 0; width: 62%; height: 100%;
   opacity: 0.88; pointer-events: none;
-  /* 45deg 沿左下→右上，等高线整片斜着渐隐，左下淡出、右上留满。 */
-  mask-image: linear-gradient(45deg, transparent 0 18%, #000 52%, #000 100%);
-}
-.ef-idlg__brandline {
-  position: absolute; z-index: 3; left: 28px; top: 104px; writing-mode: vertical-rl;
-  font-family: var(--ef-font-en); font-size: 104px; font-weight: 700; line-height: 0.82;
-  letter-spacing: 0.02em; text-transform: uppercase; color: rgba(16,18,13,0.1);
+  /* 135deg 沿左上→右下，等高线在斜线处渐隐，只留在右下角，不越过边界。 */
+  mask-image: linear-gradient(135deg, transparent 0 40%, #000 58%, #000 100%);
 }
 .ef-idlg__close {
   position: absolute; z-index: 30; right: 28px; top: 40px; width: 42px; height: 42px; padding: 10px;
@@ -105,10 +117,43 @@
   color: #10120d; background: rgba(242,241,233,0.92); border-color: #10120d;
   outline: 2px solid #10120d; outline-offset: 2px; transform: rotate(4deg);
 }
-.ef-idlg__content { position: relative; z-index: 5; display: flex; flex-direction: column; min-width: 0; height: 100%; overflow: hidden; padding: 92px 52px 24px 164px; }
+.ef-idlg__content { position: relative; z-index: 5; display: flex; flex-direction: column; min-width: 0; height: 100%; overflow: hidden; padding: 92px 52px 24px 64px; }
 /* 中英两行错位堆叠：中文的左上角压在英文首字母的中心上，英文半透明退到后面当底板。
    偏移全部按 --ef-idlg-fs（英文字号）取值，换字号时错位比例不变。 */
-.ef-idlg__heading { --ef-idlg-fs: clamp(62px, 6.6vw, 96px); position: relative; }
+.ef-idlg__heading {
+  --ef-idlg-fs: clamp(62px, 6.6vw, 96px);
+  --ef-idlg-sub-fs: clamp(40px, 4.4vw, 62px);
+  position: relative;
+}
+/* 灰带高度对齐线描英文：底边收到英文行盒的底部，不再覆盖整段中文。 */
+.ef-idlg__heading::before {
+  content: ""; position: absolute; z-index: -1; left: -64px; right: -52px; top: -14px;
+  bottom: calc(var(--ef-idlg-sub-fs) - var(--ef-idlg-fs) * 0.37);
+  background: #d0d0d0; pointer-events: none;
+}
+/* 标题块与灰带之间留出 14px 的深灰标签条，白/米色块从英文顶部开始。 */
+.ef-idlg__plate {
+  display: table; position: relative;
+  padding: 0 18px 8px; margin: 0 0 -8px -18px;
+  background: #f1f0e9;
+}
+.ef-idlg__plate-tag {
+  position: absolute; z-index: 1; left: -18px; top: -14px;
+  display: flex; align-items: center; width: 120px; height: 14px;
+  background: #6f736c; color: #e9e8e2; pointer-events: none;
+}
+.ef-idlg__plate-tag svg {
+  display: block; width: 14px; height: 14px; padding: 2.5px; flex: none;
+  background: #10120d; box-sizing: border-box;
+}
+/* 灰带右端的一行品牌字，和左侧标题块同一水平带。 */
+.ef-idlg__meta-note {
+  position: absolute; z-index: 1; right: -38px;
+  bottom: calc(var(--ef-idlg-sub-fs) - var(--ef-idlg-fs) * 0.37 + 4px);
+  font-family: var(--ef-font-mono); font-size: 9px; font-weight: 700;
+  letter-spacing: 0.14em; white-space: nowrap; color: rgba(16,18,13,0.55);
+  pointer-events: none;
+}
 .ef-idlg__title {
   margin: 0; font-family: var(--ef-font-en); font-size: var(--ef-idlg-fs);
   font-weight: 700; line-height: 0.76; letter-spacing: -0.04em; text-transform: uppercase;
@@ -117,12 +162,12 @@
 .ef-idlg__subtitle {
   display: flex; align-items: flex-end; gap: 12px;
   margin-top: calc(var(--ef-idlg-fs) * -0.37); margin-left: calc(var(--ef-idlg-fs) * 0.26);
-  font-size: clamp(40px, 4.4vw, 62px); font-weight: 900;
+  font-size: var(--ef-idlg-sub-fs); font-weight: 900;
   line-height: 1; letter-spacing: 0.07em; color: #10120d;
 }
 /* 中文标题右下角的四个黄色方块，跟着标题长度走，底边贴中文字面下沿。 */
 .ef-idlg__marks { display: flex; gap: 5px; padding-bottom: 7px; }
-.ef-idlg__marks b { display: block; width: 14px; height: 14px; background: var(--ef-yellow); }
+.ef-idlg__marks b { display: block; width: 14px; height: 14px; background: var(--ef-idlg-yellow); }
 .ef-idlg__body {
   max-width: 580px; margin: 16px 0 0; font-size: 13px; line-height: 1.65;
   letter-spacing: 0.02em; color: rgba(17,19,14,0.66);
@@ -146,12 +191,12 @@
   margin-top: auto; padding-top: 14px; border-top: 1px solid rgba(16,18,13,0.45);
   font-family: var(--ef-font-mono); font-size: 8px; font-weight: 700; letter-spacing: 0.13em;
 }
-/* 右下角的图例色块：黄 / 粉紫 / 青。 */
+/* 右下角的图例色块：粉紫 / 黄 / 青。 */
 .ef-idlg__chips { display: flex; gap: 6px; }
 .ef-idlg__chips i { display: block; width: 38px; height: 12px; }
-.ef-idlg__chips i:nth-child(1) { background: var(--ef-yellow); }
-.ef-idlg__chips i:nth-child(2) { background: #ff6fe0; }
-.ef-idlg__chips i:nth-child(3) { background: #3fe0d8; }
+.ef-idlg__chips i:nth-child(1) { background: #ff6fe0; }
+.ef-idlg__chips i:nth-child(2) { background: var(--ef-idlg-yellow); }
+.ef-idlg__chips i:nth-child(3) { background: #00ffa6; }
 
 /* ---- 站点入口弹窗扩展：封面媒体块（圆角边框）+ 地址行末尾的跳转图标按钮。 ---- */
 .ef-idlg__media { margin: 14px 0 0; border: 1px solid rgba(16,18,13,0.62); border-radius: 12px; background: #10120d; overflow: hidden; }
@@ -162,7 +207,7 @@
   cursor: pointer; transition: background-color 0.12s, color 0.12s;
 }
 .ef-idlg__jump svg { width: 15px; height: 15px; fill: none; stroke: currentColor; stroke-width: 2.6; stroke-linecap: round; stroke-linejoin: round; }
-.ef-idlg__jump:hover, .ef-idlg__jump:focus-visible { background: var(--ef-yellow); color: #10120d; }
+.ef-idlg__jump:hover, .ef-idlg__jump:focus-visible { background: var(--ef-idlg-yellow); color: #10120d; }
 .ef-idlg__row:has(.ef-idlg__jump) { grid-template-columns: 122px minmax(30px, 1fr) minmax(104px, auto) auto; }
 
 /* ---- 外链列表（RSS 条目 / 友链）：列表自身滚动，标题在左、附注（日期/描述）在右，点击新标签页打开。 ---- */
@@ -259,10 +304,10 @@
 }
 @media (max-width: 900px) {
   .ef-idlg__panel { width: min(100vw - 40px, 820px); }
-  .ef-idlg__brandline { font-size: 74px; }
-  .ef-idlg__content { padding: 120px 30px 24px 112px; }
-  .ef-idlg__heading { --ef-idlg-fs: clamp(52px, 10vw, 76px); }
-  .ef-idlg__subtitle { font-size: clamp(36px, 7vw, 52px); }
+  .ef-idlg__content { padding: 120px 30px 24px 52px; }
+  .ef-idlg__heading { --ef-idlg-fs: clamp(52px, 10vw, 76px); --ef-idlg-sub-fs: clamp(36px, 7vw, 52px); }
+  .ef-idlg__heading::before { left: -52px; right: -30px; }
+  .ef-idlg__meta-note { right: -16px; }
 }
 @media (max-width: 720px) {
   .ef-idlg__frame { padding: 15px; }
@@ -280,10 +325,10 @@
   }
   .ef-idlg__contours { left: 0; width: 100%; opacity: 0.35; }
   .ef-idlg__close { right: 20px; top: 32px; width: 36px; height: 36px; padding: 8px; }
-  .ef-idlg__brandline { top: 56px; left: 14px; font-size: 44px; }
-  .ef-idlg__content { padding: 122px 18px 18px 74px; }
-  .ef-idlg__heading { --ef-idlg-fs: clamp(48px, 14vw, 72px); }
-  .ef-idlg__subtitle { font-size: 36px; }
+  .ef-idlg__content { padding: 122px 18px 18px 40px; }
+  .ef-idlg__heading { --ef-idlg-fs: clamp(48px, 14vw, 72px); --ef-idlg-sub-fs: 36px; }
+  .ef-idlg__heading::before { left: -40px; right: -18px; }
+  .ef-idlg__meta-note { right: -4px; font-size: 8px; }
   .ef-idlg__body { font-size: 13px; }
   .ef-idlg__row { grid-template-columns: 1fr auto; }
   .ef-idlg__row > i { display: none; }

@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useLayoutEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useId, useLayoutEffect, useRef, useState } from "react";
 import { gsap } from "gsap";
 import { createTopoContourPaths } from "../lib/topo-contours";
 import type { DialogContent } from "../config/menu-content";
@@ -46,27 +46,64 @@ function makeWriter(el: HTMLElement) {
 }
 
 function DialogFace({ content, isStatic }: { content: DialogContent; isStatic: boolean }) {
+  // 每个揭示条带各有一份 SVG，pattern/mask 必须用独立 id，避免整页第一个（可能已隐藏的）副本被引用。
+  const wordUid = useId().replace(/[^a-zA-Z0-9_-]/g, "");
+  const wordLineId = `ef-idlg-wordline-${wordUid}`;
   return (
     <div className="ef-idlg__surface" aria-hidden={isStatic ? undefined : "true"}>
       <div className="ef-idlg__toplines" aria-hidden="true" />
+      <div className="ef-idlg__topword" aria-hidden="true">
+        <svg viewBox="0 0 1032 160" preserveAspectRatio="none">
+          <defs>
+            <pattern
+              id={wordLineId}
+              width="7"
+              height="7"
+              patternUnits="userSpaceOnUse"
+              patternTransform="rotate(45)"
+            >
+              <line x1="0" y1="0" x2="0" y2="7" stroke="#10120d" strokeOpacity="0.85" strokeWidth="3" />
+            </pattern>
+          </defs>
+          <text x="0" y="124" textLength="1032" lengthAdjust="spacingAndGlyphs" fill={`url(#${wordLineId})`}>
+            ENDFIELD
+          </text>
+        </svg>
+      </div>
       <div className="ef-idlg__topline" aria-hidden="true" />
       <svg className="ef-idlg__contours" viewBox="0 0 600 520" preserveAspectRatio="none" aria-hidden="true">
         <use href="#ef-idlg-contours" />
       </svg>
-      <div className="ef-idlg__brandline" aria-hidden="true">
-        <strong>ENDFIELD</strong>
-      </div>
       <div className="ef-idlg__content">
         <div className="ef-idlg__heading">
-          <h2 className="ef-idlg__title">{content.title}</h2>
-          <div className="ef-idlg__subtitle">
-            <span>{content.subtitle}</span>
-            <i className="ef-idlg__marks" aria-hidden="true">
-              <b />
-              <b />
-              <b />
-              <b />
-            </i>
+          <span className="ef-idlg__plate-tag" aria-hidden="true">
+            <svg viewBox="0 0 24 24">
+              <circle
+                cx="12"
+                cy="12"
+                r="8"
+                fill="none"
+                stroke="currentColor"
+                strokeWidth="2.8"
+                strokeDasharray="34 8"
+                transform="rotate(-50 12 12)"
+              />
+            </svg>
+          </span>
+          <span className="ef-idlg__meta-note" aria-hidden="true">
+            ARKNIGHTS: ENDFIELD
+          </span>
+          <div className="ef-idlg__plate">
+            <h2 className="ef-idlg__title">{content.title}</h2>
+            <div className="ef-idlg__subtitle">
+              <span>{content.subtitle}</span>
+              <i className="ef-idlg__marks" aria-hidden="true">
+                <b />
+                <b />
+                <b />
+                <b />
+              </i>
+            </div>
           </div>
         </div>
         <p className="ef-idlg__body">{content.description}</p>
