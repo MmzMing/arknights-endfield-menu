@@ -32,7 +32,7 @@ export const BACKDROP_FIELD = {
   const js = readFileSync(`${DEMO}/card-contours.js`, "utf8");
   const json = js.match(/EF\.CARD_CONTOURS = ([\s\S]*?\]);\s*\}\)\(\);/)[1];
   // not plain JSON: the literal keeps its per-card comments, so evaluate it as JS to validate the slice
-  const parsed = new Function("return " + json)();
+  new Function("return " + json)();
   const ts = `/* Contour lines on the top two left cards, traced line by line from a screenshot of the Arknights: Endfield
    main menu. One entry per polyline: [strokeWidth, strokeOpacity, x0, y0, x1, y1, ...] in card-local px (440 x 172).
    Extracted verbatim from the demo's card-contours.js. Derived from the game's imagery:

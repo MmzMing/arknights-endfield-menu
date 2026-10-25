@@ -4,7 +4,8 @@ import type { FeedFailure, FeedItem, FeedSnapshot } from "../config/feeds";
 
 const ENDPOINT = "/api/feeds";
 const CLIENT_TTL_MS = 60_000;
-const REQUEST_TIMEOUT_MS = 25_000;
+/** 必须长于服务端的整体预算（FEED_CONFIG.edgeBudgetMs），否则客户端先 abort，永远看不到部分快照 */
+const REQUEST_TIMEOUT_MS = 20_000;
 
 export type FeedStatus = "loading" | "ready" | "error";
 
@@ -82,8 +83,9 @@ export function useFeeds(active: boolean): FeedView {
     const timer = setTimeout(() => controller.abort(), REQUEST_TIMEOUT_MS);
 
     try {
+      // 不写 cache: "no-store"：那会让沿途所有共享缓存都不落盘，等于把响应里的 s-maxage 作废，
+      // 每个访客都重跑一次全量抓取。用默认策略，让边缘节点按 cacheTtlSeconds 直接回。
       const response = await fetch(force ? `${ENDPOINT}?refresh=1` : ENDPOINT, {
-        cache: "no-store",
         headers: { accept: "application/json" },
         signal: controller.signal,
       });

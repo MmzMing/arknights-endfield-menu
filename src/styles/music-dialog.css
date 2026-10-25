@@ -23,9 +23,10 @@
 }
 
 .ef-mus {
-  --ef-mus-yellow: #ffe128;
-  --ef-mus-pink: #ff3cac;
-  --ef-mus-cyan: #2fd8e6;
+  /* 三色强调：与信息弹窗右下角图例（.ef-idlg__chips）保持同一组色值。 */
+  --ef-mus-yellow: #f5f64b;
+  --ef-mus-pink: #ff6fe0;
+  --ef-mus-green: #00ffa6;
   --ef-mus-red: #e0483a;
   --ef-mus-signal-w: 44px;
   --ef-mus-paper: #f3f3ea;
@@ -68,7 +69,7 @@
 }
 .ef-mus__glow {
   position: absolute; left: 90px; top: 80px; width: 620px; height: 620px; border-radius: 50%;
-  background: radial-gradient(circle, rgba(255, 225, 40, 0.06), rgba(255, 225, 40, 0) 64%);
+  background: radial-gradient(circle, rgba(245, 246, 75, 0.06), rgba(245, 246, 75, 0) 64%);
   filter: blur(10px); pointer-events: none;
 }
 
@@ -125,7 +126,7 @@
 }
 .ef-mus[data-playing="true"] .ef-mus__vinyl { animation-play-state: running; }
 .ef-mus__player:hover .ef-mus__vinyl {
-  box-shadow: 0 30px 54px rgba(0, 0, 0, 0.68), 0 0 36px rgba(255, 225, 40, 0.16), inset 0 0 90px rgba(0, 0, 0, 0.6);
+  box-shadow: 0 30px 54px rgba(0, 0, 0, 0.68), 0 0 36px rgba(245, 246, 75, 0.16), inset 0 0 90px rgba(0, 0, 0, 0.6);
 }
 .ef-mus__vinyl::before {
   content: ""; position: absolute; inset: 3%; border-radius: 50%;
@@ -134,7 +135,7 @@
 }
 .ef-mus__vinyl::after {
   content: ""; position: absolute; inset: 1%; border-radius: 50%;
-  background: conic-gradient(from 196deg, transparent 0 70%, rgba(255, 225, 40, 0.65) 77%, transparent 82%);
+  background: conic-gradient(from 196deg, transparent 0 70%, rgba(245, 246, 75, 0.65) 77%, transparent 82%);
   mask: radial-gradient(circle, transparent 0 77%, #000 78%);
   opacity: 0.7;
 }
@@ -151,7 +152,7 @@
   background: #171a12; color: var(--ef-mus-yellow);
   pointer-events: none;
   box-shadow:
-    0 0 0 2px rgba(255, 225, 40, 0.92),
+    0 0 0 2px rgba(245, 246, 75, 0.92),
     0 0 0 6px rgba(8, 10, 7, 0.72),
     0 14px 26px rgba(0, 0, 0, 0.55);
   animation: efMusSpin 18s linear infinite;
@@ -192,7 +193,7 @@
 .ef-mus__cover::after {
   content: ""; position: absolute; inset: 0; pointer-events: none;
   background:
-    linear-gradient(128deg, rgba(255, 225, 40, 0.12), transparent 44%),
+    linear-gradient(128deg, rgba(245, 246, 75, 0.12), transparent 44%),
     repeating-linear-gradient(0deg, rgba(0, 0, 0, 0.1) 0 1px, transparent 1px 4px);
   mix-blend-mode: multiply;
 }
@@ -200,8 +201,8 @@
   position: absolute; inset: 0; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 12px;
   color: var(--ef-mus-yellow);
   background:
-    repeating-linear-gradient(135deg, rgba(255, 225, 40, 0.08) 0 1px, transparent 1px 9px),
-    radial-gradient(circle at 30% 26%, rgba(255, 225, 40, 0.2), transparent 58%),
+    repeating-linear-gradient(135deg, rgba(245, 246, 75, 0.08) 0 1px, transparent 1px 9px),
+    radial-gradient(circle at 30% 26%, rgba(245, 246, 75, 0.2), transparent 58%),
     #14160f;
 }
 .ef-mus__cover-fallback b { font-family: var(--ef-font-en); font-size: 26px; font-weight: 700; letter-spacing: 0.18em; }
@@ -280,7 +281,7 @@
   background: linear-gradient(90deg,
     var(--ef-mus-pink) 0 var(--ef-mus-signal-w),
     var(--ef-mus-yellow) var(--ef-mus-signal-w) calc(var(--ef-mus-signal-w) * 2),
-    var(--ef-mus-cyan) calc(var(--ef-mus-signal-w) * 2) 100%);
+    var(--ef-mus-green) calc(var(--ef-mus-signal-w) * 2) 100%);
 }
 .ef-mus__info-chips {
   position: relative; z-index: 1;
@@ -333,14 +334,14 @@
 .ef-mus__seekrail-thumb {
   position: absolute; left: 0; top: 50%; z-index: 1; width: 2px; height: 32px;
   background: var(--ef-mus-yellow);
-  box-shadow: 0 0 0 1px rgba(21, 23, 14, 0.55), 0 0 7px rgba(255, 225, 40, 0.6);
+  box-shadow: 0 0 0 1px rgba(21, 23, 14, 0.55), 0 0 7px rgba(245, 246, 75, 0.6);
   transform: translate(-50%, -50%);
   transition: background-color 0.12s, box-shadow 0.12s;
 }
 .ef-mus__seekrail:hover .ef-mus__seekrail-thumb,
 .ef-mus__seekrail:focus-visible .ef-mus__seekrail-thumb {
-  background: #fff36a;
-  box-shadow: 0 0 0 1px var(--ef-mus-ink), 0 0 10px rgba(255, 225, 40, 0.8);
+  background: #f8f878;
+  box-shadow: 0 0 0 1px var(--ef-mus-ink), 0 0 10px rgba(245, 246, 75, 0.8);
 }
 .ef-mus__seekrail:focus-visible { outline: 1px solid var(--ef-mus-ink); outline-offset: 2px; }
 
@@ -369,7 +370,7 @@
 }
 .ef-mus__ctl--play svg { width: 22px; height: 22px; }
 .ef-mus__ctl--play:hover, .ef-mus__ctl--play:focus-visible {
-  background: #fff36a; color: #000;
+  background: #f8f878; color: #000;
 }
 
 .ef-mus__volume {
@@ -458,7 +459,7 @@
 .ef-mus__tab:not([data-active]):hover { background: #24271b; }
 .ef-mus__tab:hover, .ef-mus__tab:focus-visible {
   outline: none;
-  filter: drop-shadow(4px 4px 0 rgba(0, 0, 0, 0.45)) drop-shadow(0 0 7px rgba(255, 225, 40, 0.45));
+  filter: drop-shadow(4px 4px 0 rgba(0, 0, 0, 0.45)) drop-shadow(0 0 7px rgba(245, 246, 75, 0.45));
 }
 .ef-mus__tab[data-active] {
   background: var(--ef-mus-yellow); color: #10120d;
@@ -707,7 +708,7 @@
   .ef-mus__tab svg { width: 14px; height: 14px; }
   .ef-mus__tab:not([data-active]):hover { background: #24271b; }
   .ef-mus__tab:hover, .ef-mus__tab:focus-visible { filter: none; }
-  .ef-mus__tab:focus-visible { filter: drop-shadow(0 0 4px rgba(255, 225, 40, 0.85)); }
+  .ef-mus__tab:focus-visible { filter: drop-shadow(0 0 4px rgba(245, 246, 75, 0.85)); }
   .ef-mus__tab[data-active] { background: var(--ef-mus-yellow); color: #10120d; filter: none; }
   .ef-mus__title-inner { font-size: 26px; }
   .ef-mus__title-inner i { font-size: 24px; }

@@ -57,7 +57,7 @@ const SceneContext = createContext<SceneApi | null>(null);
 
 // this module is the scene's context+provider+hook+portal by design (one cohesive unit); the fast-refresh
 // boundary purity rule is traded away for that cohesion
-// oxlint-disable-next-line react(only-export-components)
+// oxlint-disable-next-line react/only-export-components
 export function useScene(): SceneApi {
   const api = useContext(SceneContext);
   if (!api) throw new Error("useScene outside SceneProvider");
@@ -133,7 +133,7 @@ export function SceneProvider({ children }: { children: ReactNode }) {
     cam.current.ry += vel.current.ry;
     applyCamera();
     // the spring loop re-arms itself; assigning its own handle here is the demo's exact structure
-    // oxlint-disable-next-line react(immutability)
+    // oxlint-disable-next-line react/immutability
     rafId.current = requestAnimationFrame(tick);
   }, [applyCamera]);
 

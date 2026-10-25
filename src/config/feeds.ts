@@ -45,10 +45,16 @@ export const FEED_CONFIG = {
   concurrency: 8,
   /** 快照脚本单个源的尝试次数（大源或偶发网络失败时重试） */
   attempts: 2,
-  /** 实时接口的单源超时（毫秒）：比快照脚本短，保证函数在平台时限内返回 */
-  edgeTimeoutMs: 8000,
-  /** 实时接口的并发源数：44 个源两批跑完，最坏等待约 16s */
+  /** 实时接口的单源超时（毫秒）：两批 × 6s 正好落在 edgeBudgetMs 之内，预算只当保险丝用 */
+  edgeTimeoutMs: 6000,
+  /** 实时接口的并发源数：44 个源两批跑完，最坏等待约 12s */
   edgeConcurrency: 22,
+  /** 实时接口的整体预算（毫秒）：到点就返回已抓到的部分。平台的函数硬时限约 30s，
+      超了直接 545「Error return from script」，一个字节都拿不到；宁可回半份快照 */
+  edgeBudgetMs: 14000,
+  /** 实时接口单源最多下载的字节数：友链里有 1 MB 级的全内容源，44 个源合计 11 MB，
+      边缘 isolate 解析不完。RSS 新条目在文件头部，取头部即可满足 maxPerSite */
+  edgeMaxBytes: 262144,
   /** 实时接口单源尝试次数 */
   edgeAttempts: 1,
   /** 实时接口的边缘缓存秒数；refresh=1 可绕过 */

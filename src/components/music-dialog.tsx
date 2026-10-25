@@ -386,11 +386,11 @@ export function MusicDialog({ player, onClose }: { player: MusicPlayerApi; onClo
           );
         }
         ring.closePath();
-        ring.strokeStyle = "rgba(255, 225, 40, 0.92)";
+        ring.strokeStyle = "rgba(245, 246, 75, 0.92)";
         ring.lineWidth = 2.2;
         ring.lineJoin = "round";
         ring.lineCap = "round";
-        ring.shadowColor = "rgba(255, 225, 40, 0.55)";
+        ring.shadowColor = "rgba(245, 246, 75, 0.55)";
         ring.shadowBlur = 12;
         ring.stroke();
         ring.shadowBlur = 0;
