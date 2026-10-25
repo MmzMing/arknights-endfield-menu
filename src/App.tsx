@@ -22,6 +22,7 @@ import { PlayerBadge } from "./components/player-badge";
 import { ProfilePanel } from "./components/profile-panel";
 import { CloseButton, Hud, NetInfo } from "./components/hud";
 import { InfoDialog } from "./components/info-dialog";
+import { LegalFooter } from "./components/legal-footer";
 import { MusicDialog } from "./components/music-dialog";
 import { useMenuPhase } from "./hooks/use-menu-phase";
 import { useFeeds } from "./hooks/use-feeds";
@@ -167,11 +168,13 @@ export default function App() {
             <SceneBridge onScene={onScene} />
           </SceneProvider>
           <NetInfo netUid={content.net.uid} />
+          <LegalFooter />
         </div>
       </div>
       <button className="ef-closed-hint" id="efClosedHint" onClick={menu.open}>
         MENU CLOSED · 点击重新打开
       </button>
+      <LegalFooter variant="fixed" />
       <div className="ef-post" aria-hidden="true">
         <div className="ef-post__grade" />
       </div>

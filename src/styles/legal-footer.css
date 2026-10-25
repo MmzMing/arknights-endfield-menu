@@ -1,0 +1,66 @@
+/* Site footer: filing links on the left, main-menu replica notice on the right. */
+.ef-legal {
+  --legal-ink: rgba(255, 255, 255, 0.55);
+  --legal-strong: rgba(255, 255, 255, 0.9);
+  position: absolute;
+  left: 27px;
+  right: 27px;
+  top: 1063px;
+  z-index: 4;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 24px;
+  font: 500 12px/1 var(--ef-font-cn);
+  color: var(--legal-ink);
+  pointer-events: auto;
+  white-space: nowrap;
+}
+.ef-legal__left {
+  display: flex;
+  align-items: center;
+  gap: 15px;
+  min-width: 0;
+}
+.ef-legal__copyright { color: var(--legal-ink); }
+.ef-legal__link {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  color: var(--legal-ink);
+  text-decoration: none;
+  transition: color 0.15s ease;
+  cursor: url("/mouse/link.cur"), pointer;
+}
+.ef-legal__link:hover { color: var(--legal-strong); }
+.ef-legal__police-icon {
+  width: 13px;
+  height: 13px;
+  object-fit: contain;
+  opacity: 0.78;
+}
+.ef-legal__notice {
+  margin: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  text-align: right;
+  font-size: 12px;
+  color: var(--legal-ink);
+}
+
+/* Closed landing: the stage is invisible, so this copy keeps the filing on screen. */
+.ef-legal--fixed {
+  position: fixed;
+  top: auto;
+  bottom: 14px;
+  z-index: 25;
+  display: none;
+  --legal-ink: rgba(26, 28, 30, 0.62);
+  --legal-strong: rgba(26, 28, 30, 0.9);
+}
+body.ef-closed .ef-legal--fixed { display: flex; }
+
+@media (max-width: 900px) {
+  .ef-legal { gap: 12px; }
+  .ef-legal__notice { font-size: 9px; }
+}
