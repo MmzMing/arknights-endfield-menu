@@ -139,7 +139,7 @@ export default function App() {
               <NewsBelt />
             </SceneLayer>
             <SceneLayer name="core">
-              <Disc paused={paused} entering={menu.phase === "entering"}>
+              <Disc paused={paused}>
                 <TransitionSkeleton />
                 <DialRings />
                 <LevelPill label={TECH_STACK_LABEL} level={String(TECH_STACK_COUNT)} onAction={actions.onAction} />

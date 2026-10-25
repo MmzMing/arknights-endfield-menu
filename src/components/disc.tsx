@@ -1,7 +1,8 @@
 import { useLayoutEffect, useRef, type ReactNode } from "react";
 import { PARTS } from "../scene/scene-constants";
 import { useScene } from "../scene/scene-context";
-import { ContourMap } from "./contour-map";
+import { useMapParallax } from "../hooks/use-map-parallax";
+import { ChinaMap } from "./china-map";
 import "../styles/disc.css";
 
 /* Central disc: the dark circular well that the dial rings, level pill and flags sit around.
@@ -10,7 +11,8 @@ import "../styles/disc.css";
    The ring components (skeleton, dial, level pill) render as this component's children, so they mount into the
    same cylinder — the React equivalent of the demo's mount() returning the disc element. */
 
-export function Disc({ children, paused, entering }: { children?: ReactNode; paused: boolean; entering: boolean }) {
+export function Disc({ children, paused }: { children?: ReactNode; paused: boolean }) {
+  const coreRef = useMapParallax(paused);
   const winRef = useRef<HTMLDivElement>(null);
   const scene = useScene();
 
@@ -19,9 +21,9 @@ export function Disc({ children, paused, entering }: { children?: ReactNode; pau
   }, [scene]);
 
   return (
-    <div className="ef-core">
+    <div className="ef-core" ref={coreRef}>
       <div className="ef-core__win" ref={winRef}>
-        <div className="ef-core__map"><ContourMap paused={paused} entering={entering} /></div>
+        <div className="ef-core__map"><ChinaMap /></div>
       </div>
       {children}
     </div>

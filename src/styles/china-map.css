@@ -1,0 +1,66 @@
+/* China map, migrated from the reference region-map demo (dark theme), plus the cel-shaded Guangdong sign. */
+
+.ef-cnmap { position: absolute; inset: 0; isolation: isolate; }
+
+/* The 540 : 440 art sits at 87% width, shifted up-left inside the disc's 894 px circular well. Chinese land then
+   keeps a safe margin from the round mask (max radius about 417 px, plus the band glow) and the north-west arm
+   uses the previously empty top-left of the disc. The pointer parallax moves the art and the sign (same offset). */
+.ef-cnmap__art {
+  position: absolute;
+  left: 2.47%;
+  top: 47.32%;
+  width: 87%;
+  aspect-ratio: 540 / 440;
+  translate: 0 -50%;
+  transform: translate3d(var(--ef-par-x, 0px), var(--ef-par-y, 0px), 0);
+  will-change: transform;
+}
+.ef-cnmap__svg { display: block; width: 100%; height: 100%; }
+
+/* Top-to-bottom scan line, migrated from the old contour map's sweep. */
+.ef-cnmap__scan {
+  position: absolute;
+  z-index: 2;
+  left: 8%;
+  right: 8%;
+  top: 0;
+  height: 1px;
+  opacity: 0.34;
+  pointer-events: none;
+  background: linear-gradient(90deg, transparent, rgba(229, 234, 231, 0.7), rgba(255, 255, 255, 0.8), transparent);
+  box-shadow: 0 0 12px rgba(229, 234, 231, 0.2);
+}
+@media (prefers-reduced-motion: no-preference) {
+  .ef-cnmap__scan { animation: efCnmapScan 6.4s linear infinite; }
+  .ef-stage[data-paused="true"] .ef-cnmap__scan { animation-play-state: paused; }
+}
+@keyframes efCnmapScan {
+  from { transform: translateY(80px); }
+  to { transform: translateY(790px); }
+}
+@media (prefers-reduced-motion: reduce) {
+  .ef-cnmap__scan { display: none; }
+}
+
+/* Guangdong marker: the white arrow alone, pointing at the map point. */
+.ef-cnmap__arrow { fill: #f6f7f3; stroke: #131518; stroke-width: 1.5; stroke-linejoin: round; }
+
+.ef-cnmap__neighbors { stroke: #5c5c63; }
+.ef-cnmap__land { fill: #2c2c30; stroke: #4a4a50; }
+.ef-cnmap__drop { flood-color: #000000; flood-opacity: 0.45; }
+
+/* One full loop around the border every 14 seconds; the offsets keep the layers slightly staggered */
+.ef-cnmap__band { animation: efCnmapTravel 14s linear infinite; }
+.ef-cnmap__band--1 { animation-delay: -0.42s; }
+.ef-cnmap__band--2 { animation-delay: -0.84s; }
+@keyframes efCnmapTravel {
+  from { stroke-dashoffset: 0; }
+  to { stroke-dashoffset: -1000; }
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  .ef-stage[data-paused="true"] .ef-cnmap__band { animation-play-state: paused; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .ef-cnmap__band { animation: none !important; }
+}
