@@ -9,6 +9,7 @@
     "lint": "oxlint",
     "preview": "vite preview",
     "check:libs": "node src/test/lib/check-libs.mjs",
+    "check:feeds": "node src/test/server/check-feeds.mjs",
     "feeds:update": "node scripts/fetch-feeds.mjs",
     "icons:generate": "node scripts/build-pwa-icons.mjs"
   },

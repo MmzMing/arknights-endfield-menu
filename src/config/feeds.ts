@@ -1,5 +1,7 @@
 /* 顶栏 RSS 聚合的数据源与抓取参数。
-   实时数据由 /api/feeds 在请求时聚合「本站 + 全部友链」的 RSS：
+   实时数据由 /api/feeds 在请求时聚合「本站 + 全部友链」的 RSS：客户端按 feed-sources.ts 的批次
+   并行拉 `/api/feeds?batch=N`（渐进合并、单批互不拖累），重试只重抓过期或没成功过的批（增量）；
+   接口不带 batch 时仍是全量快照。
    EdgeOne / Cloudflare / Vercel 共用 server/feeds.ts，本地 dev 走 Vite 中间件（40+ 个源会被浏览器 CORS 挡住）。
    src/assets/rss-feed.ts 的构建快照只在接口不可用时兜底，用 pnpm feeds:update 刷新。 */
 
@@ -45,11 +47,13 @@ export const FEED_CONFIG = {
   concurrency: 8,
   /** 快照脚本单个源的尝试次数（大源或偶发网络失败时重试） */
   attempts: 2,
-  /** 实时接口的单源超时（毫秒）：两批 × 6s 正好落在 edgeBudgetMs 之内，预算只当保险丝用 */
+  /** 实时接口的单源超时（毫秒）：批大小 ≤ 并发上限时一批一轮跑完，单批等待上界就是它 */
   edgeTimeoutMs: 6000,
-  /** 实时接口的并发源数：44 个源两批跑完，最坏等待约 12s */
+  /** 实时接口单批内的并发上限：批大小 ≤ 它时每批一轮跑完 */
   edgeConcurrency: 22,
-  /** 实时接口的整体预算（毫秒）：到点就返回已抓到的部分。平台的函数硬时限约 30s，
+  /** 每批处理的源数：客户端按此并行拉 `/api/feeds?batch=N`，批越小首屏出现越快、单批失败影响面越小 */
+  batchSize: 8,
+  /** 实时接口每批的整体预算（毫秒）：到点就返回已抓到的部分。平台的函数硬时限约 30s，
       超了直接 545「Error return from script」，一个字节都拿不到；宁可回半份快照 */
   edgeBudgetMs: 14000,
   /** 实时接口单源最多下载的字节数：友链里有 1 MB 级的全内容源，44 个源合计 11 MB，

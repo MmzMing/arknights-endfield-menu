@@ -1,4 +1,5 @@
 // 实时订阅聚合：抓取「本站 + 全部友链」的 RSS/Atom，返回条目与抓取失败的源。
+// 接口支持 ?batch=N 只聚合一个批次（客户端并行拉批、渐进合并）；缺省 = 全量。
 // 由 EdgeOne / Cloudflare / Vercel 的函数适配器与 Vite dev 中间件共用；快照脚本也复用它。
 import { extract } from "@extractus/feed-extractor";
 import {
@@ -7,8 +8,7 @@ import {
   type FeedItem,
   type FeedSnapshot,
 } from "../src/config/feeds.ts";
-import { FRIEND_LINKS } from "../src/config/friend-links.ts";
-import { SITE_CONFIG } from "../src/config/site-config.ts";
+import { FEED_SOURCES, feedBatch, feedBatchCount, type FeedSource } from "../src/config/feed-sources.ts";
 import { toFeedItems } from "../src/lib/feed.ts";
 
 // 部分源会拦截默认 UA / 非浏览器请求，保留与快照脚本一致的浏览器 UA。
@@ -18,31 +18,21 @@ const ACCEPT = "application/atom+xml, application/rss+xml, application/xml, text
 const CACHE_KEY_PATH = "/api/feeds";
 // 预算耗尽时根本没开抓的源，原因要和"抓到了但没解析出来"分开，否则失败列表读起来像源坏了。
 const SKIPPED_REASON = "未抓取（整体超时）";
-
-interface FeedSource {
-  name: string;
-  feedUrl: string;
-  siteUrl: string;
-}
+/** 单源超时哨兵：race 用它区分「deadline 先到」与「真的抓到了 feed」 */
+const TIMEOUT = Symbol("feed-timeout");
 
 interface SourceResult {
   items: FeedItem[];
   failure?: FeedFailure;
 }
 
-const SOURCES: FeedSource[] = [
-  { name: FEED_CONFIG.selfName, feedUrl: FEED_CONFIG.selfUrl, siteUrl: SITE_CONFIG.siteUrl },
-  ...FRIEND_LINKS.flatMap((friend) =>
-    friend.rss ? [{ name: friend.name, feedUrl: friend.rss, siteUrl: friend.url }] : [],
-  ),
-].filter((source, index, all) => all.findIndex((candidate) => candidate.feedUrl === source.feedUrl) === index);
-
 export interface FeedAggregateOptions {
   attempts: number;
   concurrency: number;
   maxPerSite: number;
   timeoutMs: number;
-  /** 整体预算（毫秒），缺省=不限：快照脚本要全量，实时接口必须给，否则会被平台的函数时限掐掉 */
+  /** 整体预算（毫秒），缺省=不限：快照脚本要全量，实时接口必须给，否则会被平台的函数时限掐掉。
+      到点即返回已抓到的部分（race 兑现，不依赖 abort 能让在途请求收尾） */
   budgetMs?: number;
   /** 单源最多下载的字节数，缺省=整份下载 */
   maxBytes?: number;
@@ -126,11 +116,19 @@ async function fetchSource(
   let lastError: unknown;
   for (let attempt = 1; attempt <= options.attempts; attempt++) {
     const controller = new AbortController();
-    const timer = setTimeout(() => controller.abort(), options.timeoutMs);
+    // 单源超时不能只靠 abort：EdgeOne 边缘运行时的 fetch 不理会 signal，在途请求可能永不 settle，
+    // 超时用 deadline 哨兵兑现，abort 只当尽快收尾的加速手段
+    let timer: ReturnType<typeof setTimeout> | undefined;
+    const deadline = new Promise<typeof TIMEOUT>((resolve) => {
+      timer = setTimeout(() => {
+        controller.abort();
+        resolve(TIMEOUT);
+      }, options.timeoutMs);
+    });
     const onBudget = () => controller.abort();
     budget?.addEventListener("abort", onBudget, { once: true });
     try {
-      const feed = await extract(
+      const extraction = extract(
         source.feedUrl,
         { descriptionMaxLen: 0, useISODateFormat: true },
         (url) =>
@@ -140,6 +138,14 @@ async function fetchSource(
             options.maxBytes,
           ),
       );
+      // deadline 胜出后这条抓取还可能挂在后台，吞掉它的后续结果免得变成未处理的拒绝
+      void extraction.catch(() => undefined);
+      const feed = await Promise.race([extraction, deadline]);
+      if (feed === TIMEOUT) {
+        const timeout = new Error(`no response within ${options.timeoutMs}ms`);
+        timeout.name = "TimeoutError";
+        throw timeout;
+      }
       const items = toFeedItems(feed.entries, source.name, options.maxPerSite);
       if (items.length > 0) return { items };
       lastError = new Error("feed has no usable entries");
@@ -159,18 +165,20 @@ async function fetchSource(
   };
 }
 
-export async function aggregateFeeds(options: FeedAggregateOptions = REALTIME_OPTIONS): Promise<FeedSnapshot> {
-  const results = new Array<SourceResult | undefined>(SOURCES.length);
+export async function aggregateFeeds(
+  options: FeedAggregateOptions = REALTIME_OPTIONS,
+  sources: FeedSource[] = FEED_SOURCES,
+): Promise<FeedSnapshot> {
+  const results = new Array<SourceResult | undefined>(sources.length);
   let cursor = 0;
   const budget = new AbortController();
-  const budgetTimer = options.budgetMs === undefined ? null : setTimeout(() => budget.abort(), options.budgetMs);
 
   async function worker() {
-    while (cursor < SOURCES.length) {
+    while (cursor < sources.length) {
       if (budget.signal.aborted) return;
       const index = cursor;
       cursor += 1;
-      const source = SOURCES[index];
+      const source = sources[index];
       if (source === undefined) continue;
       const result = await fetchSource(source, options, budget.signal);
       results[index] = result;
@@ -178,15 +186,32 @@ export async function aggregateFeeds(options: FeedAggregateOptions = REALTIME_OP
     }
   }
 
-  const workers = Math.max(1, Math.min(options.concurrency, SOURCES.length));
-  try {
-    await Promise.all(Array.from({ length: workers }, () => worker()));
-  } finally {
-    if (budgetTimer !== null) clearTimeout(budgetTimer);
+  const workers = Math.max(1, Math.min(options.concurrency, sources.length));
+  const pool = Promise.all(Array.from({ length: workers }, () => worker()));
+
+  // 到点必须交卷：在途抓取可能永远不 settle（运行时 abort 失效），预算用 race 兑现而不是只靠 abort；
+  // 交卷后仍挂在后台的抓取不会影响已经构建好的快照
+  if (options.budgetMs === undefined) {
+    await pool;
+  } else {
+    const budgetMs = options.budgetMs;
+    let budgetTimer: ReturnType<typeof setTimeout> | undefined;
+    const deadline = new Promise<void>((resolve) => {
+      budgetTimer = setTimeout(() => {
+        budget.abort();
+        resolve();
+      }, budgetMs);
+    });
+    try {
+      await Promise.race([pool, deadline]);
+    } finally {
+      clearTimeout(budgetTimer);
+      void pool.catch(() => undefined);
+    }
   }
 
   // 没开抓的源没有 result，不显式记成失败就会被算进"成功站点"，快照读起来就一切正常了
-  const skipped = SOURCES.filter((_source, index) => results[index] === undefined);
+  const skipped = sources.filter((_source, index) => results[index] === undefined);
   const items = results
     .flatMap((result) => result?.items ?? [])
     .sort((left, right) => right.date.localeCompare(left.date))
@@ -198,8 +223,8 @@ export async function aggregateFeeds(options: FeedAggregateOptions = REALTIME_OP
 
   return {
     generatedAt: new Date().toISOString(),
-    sites: SOURCES.length - failures.length,
-    total: SOURCES.length,
+    sites: sources.length - failures.length,
+    total: sources.length,
     items,
     failures,
   };
@@ -222,23 +247,37 @@ interface CacheHit {
 
 const CACHE_AGE_HEADER = "x-feeds-cached-at";
 const CACHE_TTL_MS = FEED_CONFIG.cacheTtlSeconds * 1000;
+// Cache API 是纯优化：读/写卡住或不被支持时按 miss / 跳过处理，响应时间不能被它拖死
+const CACHE_OP_TIMEOUT_MS = 1500;
 const SHARED_CACHE_CONTROL = `public, s-maxage=${FEED_CONFIG.cacheTtlSeconds}, stale-while-revalidate=${
   FEED_CONFIG.cacheTtlSeconds * 2
 }`;
 
 let memoryCache: { key: string; storedAt: number; response: Response } | null = null;
-let revalidating: Promise<void> | null = null;
+const revalidating = new Set<string>();
 
 function platformCache(): CacheStorageLike | null {
   const globalCaches = (globalThis as { caches?: { default?: CacheStorageLike } }).caches;
   return globalCaches?.default ?? null;
 }
 
+async function boundedCacheOp<T>(promise: Promise<T>, fallback: T): Promise<T> {
+  let timer: ReturnType<typeof setTimeout> | undefined;
+  const expiry = new Promise<T>((resolve) => {
+    timer = setTimeout(() => resolve(fallback), CACHE_OP_TIMEOUT_MS);
+  });
+  try {
+    return await Promise.race([promise, expiry]);
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
 async function readCache(key: string): Promise<CacheHit | null> {
   const cache = platformCache();
   if (cache !== null) {
     try {
-      const hit = await cache.match(new Request(key));
+      const hit = await boundedCacheOp(cache.match(new Request(key)), undefined);
       if (hit === undefined) return null;
 
       // Cache API 不一定按 Cache-Control 过期，用写入时间判断新旧；没有该头则信任平台自己的 TTL。
@@ -267,7 +306,7 @@ async function writeCache(key: string, response: Response): Promise<void> {
   const cache = platformCache();
   if (cache !== null) {
     response.headers.set(CACHE_AGE_HEADER, String(Date.now()));
-    await cache.put(new Request(key), response);
+    await boundedCacheOp(cache.put(new Request(key), response), undefined);
     return;
   }
   memoryCache = { key, storedAt: Date.now(), response };
@@ -283,21 +322,24 @@ function jsonResponse(data: unknown, status: number, cacheControl: string): Resp
   });
 }
 
-async function writeSnapshot(key: string): Promise<void> {
-  await writeCache(key, jsonResponse(await aggregateFeeds(), 200, SHARED_CACHE_CONTROL));
+async function writeSnapshot(key: string, sources: FeedSource[]): Promise<void> {
+  const snapshot = await aggregateFeeds(REALTIME_OPTIONS, sources);
+  if (snapshot.items.length === 0) throw new Error("feeds produced no items");
+  await writeCache(key, jsonResponse(snapshot, 200, SHARED_CACHE_CONTROL));
 }
 
-/** 后台补缓存：同一 isolate 内只放一个在跑，免得并发请求一起抓 44 个源；失败只记日志。 */
-function revalidateInBackground(key: string, options: FeedsRequestOptions): void {
-  if (revalidating !== null) return;
-  revalidating = writeSnapshot(key)
+/** 后台补缓存：同一 isolate 内每个缓存键只放一个在跑，免得并发请求重复抓同一批源；失败只记日志。 */
+function revalidateInBackground(key: string, sources: FeedSource[], options: FeedsRequestOptions): void {
+  if (revalidating.has(key)) return;
+  revalidating.add(key);
+  const task = writeSnapshot(key, sources)
     .catch((error: unknown) => {
       console.error("feeds revalidate failed", error);
     })
     .finally(() => {
-      revalidating = null;
+      revalidating.delete(key);
     });
-  if (options.waitUntil !== undefined) options.waitUntil(revalidating);
+  if (options.waitUntil !== undefined) options.waitUntil(task);
 }
 
 export async function handleFeedsRequest(
@@ -310,18 +352,36 @@ export async function handleFeedsRequest(
 
   const url = new URL(request.url);
   const refresh = url.searchParams.get("refresh") === "1";
-  const cacheKey = new URL(CACHE_KEY_PATH, url.origin).toString();
+
+  // batch=N（0 起）只聚合第 N 批；缺省 = 全量，保留给本地排查与旧调用。
+  // 批次切分必须与客户端（feed-sources.ts）完全一致，否则缓存键与源集合会错位。
+  const batchParam = url.searchParams.get("batch");
+  let sources = FEED_SOURCES;
+  let batchScope = "";
+  if (batchParam !== null) {
+    const index = Number(batchParam);
+    if (!/^\d+$/.test(batchParam) || index >= feedBatchCount()) {
+      return jsonResponse({ error: "invalid-batch" }, 400, "no-store");
+    }
+    sources = feedBatch(index);
+    batchScope = `?batch=${index}`;
+  }
+
+  const cacheKey = new URL(`${CACHE_KEY_PATH}${batchScope}`, url.origin).toString();
   const hit = await readCache(cacheKey);
 
   // 过期也先把旧快照给出去：全量抓取最坏要十几秒，让访客干等不如先看几分钟前的列表。
   if (hit !== null && !refresh) {
     if (!hit.stale) return hit.response;
-    revalidateInBackground(cacheKey, options);
+    revalidateInBackground(cacheKey, sources, options);
     return hit.response;
   }
 
   try {
-    const response = jsonResponse(await aggregateFeeds(), 200, refresh ? "no-store" : SHARED_CACHE_CONTROL);
+    const snapshot = await aggregateFeeds(REALTIME_OPTIONS, sources);
+    // 全源失败时既不写缓存也不给 200：合法但空的快照会让客户端丢掉构建快照兜底，显示成空列表
+    if (snapshot.items.length === 0) throw new Error("feeds produced no items");
+    const response = jsonResponse(snapshot, 200, refresh ? "no-store" : SHARED_CACHE_CONTROL);
 
     // 手动刷新同样写缓存：不写的话缓存永远是冷的，每个访客都得重跑一次全量抓取。
     const stored = writeCache(cacheKey, response.clone()).catch((error: unknown) => {
