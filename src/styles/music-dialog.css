@@ -1,0 +1,771 @@
+/* 音乐终端弹窗：从主菜单圆盘语言演进的唱片机。
+   左侧没有底板：方形唱片封套压在左下，黑胶唱片从封套右上探出，中心圆用封面图作为唱片标签，
+   外圈由真实音频频谱驱动一条连续波形线。
+   右侧是一张完整面板：曲目标题、波形进度与走带键、曲库在同一张纸上；
+   两块模式磁带签从面板右缘长出，歌词模式会压缩标题区，把高度让给歌词。
+   动画：GSAP 负责入场 / 退场；唱片旋转、均衡器与加载环由 CSS 驱动。 */
+
+@keyframes efMusSpin {
+  to { transform: rotate(360deg); }
+}
+@keyframes efMusEq {
+  0%, 100% { transform: scaleY(0.28); }
+  20% { transform: scaleY(1); }
+  45% { transform: scaleY(0.46); }
+  70% { transform: scaleY(0.82); }
+}
+@keyframes efMusCoverIn {
+  from { opacity: 0; transform: scale(1.05); filter: blur(4px) grayscale(1); }
+  to { opacity: 1; transform: scale(1); filter: blur(0) grayscale(0.08); }
+}
+@keyframes efMusSpinRing {
+  to { transform: rotate(360deg); }
+}
+
+.ef-mus {
+  --ef-mus-yellow: #ffe128;
+  --ef-mus-pink: #ff3cac;
+  --ef-mus-cyan: #2fd8e6;
+  --ef-mus-red: #e0483a;
+  --ef-mus-signal-w: 44px;
+  --ef-mus-paper: #f3f3ea;
+  --ef-mus-ink: #15170e;
+  --ef-mus-muted: #62675a;
+
+  --ef-mus-info-h: 140px;
+  --ef-mus-panel-h: 606px;
+  /* 卡片右上角的斜切缺口：// MUSIC 那一行右侧整条让出去，与站内其它卡片同一套裁剪语言 */
+  --ef-mus-cut: 20px;
+  --ef-mus-notch: 260px;
+  --ef-mus-rim: 2px;
+
+  position: fixed; inset: 0; z-index: 50;
+  font-family: var(--ef-font-cn); color: var(--ef-mus-paper);
+}
+.ef-mus[data-tab="lyrics"] {
+  --ef-mus-info-h: 108px;
+}
+.ef-mus__dim {
+  position: absolute; inset: 0;
+  background:
+    radial-gradient(circle at 44% 46%, rgba(8, 10, 9, 0.32), rgba(3, 4, 4, 0.7) 76%),
+    rgba(6, 8, 7, 0.16);
+  backdrop-filter: blur(6px) saturate(0.62);
+}
+.ef-mus__defs { position: absolute; width: 0; height: 0; }
+
+.ef-mus__frame { position: absolute; inset: 0; display: grid; place-items: center; padding: 28px; pointer-events: none; }
+.ef-mus__fit {
+  position: relative;
+  width: calc(1200px * var(--ef-mus-scale, 1));
+  height: calc(780px * var(--ef-mus-scale, 1));
+  pointer-events: auto;
+}
+.ef-mus__board {
+  position: relative; width: 1200px; height: 780px;
+  transform: scale(var(--ef-mus-scale, 1));
+  transform-origin: top left;
+}
+.ef-mus__glow {
+  position: absolute; left: 90px; top: 80px; width: 620px; height: 620px; border-radius: 50%;
+  background: radial-gradient(circle, rgba(255, 225, 40, 0.06), rgba(255, 225, 40, 0) 64%);
+  filter: blur(10px); pointer-events: none;
+}
+
+/* ---- 左侧：无底板，封套 + 唱片直接浮在场景上，圆心对齐画板中线 ---- */
+.ef-mus__deck { position: absolute; left: 70px; top: 110px; width: 600px; height: 520px; z-index: 2; }
+.ef-mus__watermark {
+  position: absolute; left: -24px; top: 6px; z-index: 0;
+  font-family: var(--ef-font-en); font-size: 158px; font-weight: 700; line-height: 0.8;
+  letter-spacing: -0.02em; white-space: nowrap;
+  color: rgba(242, 241, 233, 0.055);
+  pointer-events: none;
+}
+.ef-mus__badge {
+  position: absolute; left: 30px; top: 30px; z-index: 7;
+  display: inline-flex; align-items: center; gap: 8px; height: 34px; padding: 0 12px;
+  background: var(--ef-mus-yellow); color: #10120d;
+  border: 1px solid var(--ef-mus-ink); border-bottom-width: 3px; border-radius: 5px;
+  font-size: 15px; font-weight: 900; letter-spacing: 0.06em;
+  box-shadow: 4px 5px 0 rgba(0, 0, 0, 0.28);
+}
+.ef-mus__badge svg { width: 16px; height: 16px; fill: currentColor; flex: none; }
+.ef-mus__badge small {
+  font-family: var(--ef-font-mono); font-size: 6.5px; font-weight: 700; letter-spacing: 0.14em;
+  opacity: 0.6;
+}
+/* 唱片外圈：真实频谱驱动的连续波形环 */
+.ef-mus__spectrum {
+  position: absolute; left: 50px; top: 0; width: 560px; height: 560px; z-index: 1;
+  pointer-events: none;
+}
+
+.ef-mus__player {
+  position: absolute; left: 140px; top: 90px; z-index: 3;
+  display: block; width: 380px; height: 380px; padding: 0;
+  border: 0; border-radius: 50%; background: none;
+  cursor: url("/mouse/link.cur"), pointer;
+}
+.ef-mus__player:focus-visible { outline: none; }
+.ef-mus__player:focus-visible .ef-mus__vinyl {
+  outline: 2px solid var(--ef-mus-yellow); outline-offset: 6px;
+}
+.ef-mus__vinyl {
+  position: absolute; inset: 0; border-radius: 50%; overflow: hidden;
+  background: radial-gradient(circle, #23261f 0 25%, #10130d 25.5% 62%, #090c07 100%);
+  box-shadow:
+    0 30px 54px rgba(0, 0, 0, 0.68),
+    0 6px 0 rgba(0, 0, 0, 0.4),
+    inset 0 0 0 1px rgba(242, 241, 233, 0.12),
+    inset 0 0 90px rgba(0, 0, 0, 0.6);
+  display: grid; place-items: center;
+  animation: efMusSpin 18s linear infinite;
+  animation-play-state: paused;
+  transition: box-shadow 0.25s;
+}
+.ef-mus[data-playing="true"] .ef-mus__vinyl { animation-play-state: running; }
+.ef-mus__player:hover .ef-mus__vinyl {
+  box-shadow: 0 30px 54px rgba(0, 0, 0, 0.68), 0 0 36px rgba(255, 225, 40, 0.16), inset 0 0 90px rgba(0, 0, 0, 0.6);
+}
+.ef-mus__vinyl::before {
+  content: ""; position: absolute; inset: 3%; border-radius: 50%;
+  background: repeating-radial-gradient(circle at 50% 50%, rgba(242, 241, 233, 0.09) 0 1px, transparent 1px 6px);
+  opacity: 0.7;
+}
+.ef-mus__vinyl::after {
+  content: ""; position: absolute; inset: 1%; border-radius: 50%;
+  background: conic-gradient(from 196deg, transparent 0 70%, rgba(255, 225, 40, 0.65) 77%, transparent 82%);
+  mask: radial-gradient(circle, transparent 0 77%, #000 78%);
+  opacity: 0.7;
+}
+.ef-mus__vinyl-lines {
+  position: absolute; inset: 8%; width: 84%; height: 84%; opacity: 0.12;
+  pointer-events: none; color: #e9e8df;
+  mask-image: radial-gradient(circle, #000 0 90%, transparent 100%);
+}
+/* 中心圆=封面圆：独立于唱片的标签层，压在封套上方，形成半嵌进封套的层次 */
+.ef-mus__vinyl-label {
+  position: absolute; left: 265px; top: 215px; z-index: 6;
+  display: grid; place-items: center;
+  width: 130px; height: 130px; overflow: hidden; border-radius: 50%;
+  background: #171a12; color: var(--ef-mus-yellow);
+  pointer-events: none;
+  box-shadow:
+    0 0 0 2px rgba(255, 225, 40, 0.92),
+    0 0 0 6px rgba(8, 10, 7, 0.72),
+    0 14px 26px rgba(0, 0, 0, 0.55);
+  animation: efMusSpin 18s linear infinite;
+  animation-play-state: paused;
+}
+.ef-mus[data-playing="true"] .ef-mus__vinyl-label { animation-play-state: running; }
+.ef-mus__vinyl-label b { font-family: var(--ef-font-en); font-size: 24px; font-weight: 700; letter-spacing: 0.08em; }
+.ef-mus__vinyl-label img {
+  position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover;
+  filter: contrast(1.05) saturate(0.92);
+}
+.ef-mus__vinyl-label::after {
+  content: ""; position: absolute; inset: 0; border-radius: 50%; pointer-events: none;
+  box-shadow: inset 0 8px 16px rgba(0, 0, 0, 0.48), inset 0 -2px 4px rgba(255, 255, 255, 0.14);
+}
+.ef-mus__label-hole {
+  position: absolute; z-index: 3; width: 9px; height: 9px; border-radius: 50%;
+  background: #0a0c08; box-shadow: 0 0 0 2px rgba(242, 241, 233, 0.28);
+}
+
+/* 方形封套：压在唱片左半，圆心与唱片、封面圆对齐 */
+.ef-mus__cover {
+  position: absolute; left: 30px; top: 130px; z-index: 4;
+  width: 300px; height: 300px; overflow: hidden;
+  border: 2px solid rgba(242, 241, 233, 0.82); border-radius: 4px;
+  background: #15170f;
+  box-shadow:
+    18px 22px 38px rgba(0, 0, 0, 0.62),
+    6px 7px 0 rgba(8, 10, 7, 0.45),
+    0 0 0 1px rgba(8, 10, 7, 0.5);
+  transition: transform 0.25s, border-color 0.25s;
+}
+.ef-mus__deck:hover .ef-mus__cover { transform: translateY(-2px); border-color: var(--ef-mus-yellow); }
+.ef-mus__cover img {
+  position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover;
+  animation: efMusCoverIn 0.5s cubic-bezier(0.2, 0.7, 0.2, 1) both;
+}
+.ef-mus__cover::after {
+  content: ""; position: absolute; inset: 0; pointer-events: none;
+  background:
+    linear-gradient(128deg, rgba(255, 225, 40, 0.12), transparent 44%),
+    repeating-linear-gradient(0deg, rgba(0, 0, 0, 0.1) 0 1px, transparent 1px 4px);
+  mix-blend-mode: multiply;
+}
+.ef-mus__cover-fallback {
+  position: absolute; inset: 0; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 12px;
+  color: var(--ef-mus-yellow);
+  background:
+    repeating-linear-gradient(135deg, rgba(255, 225, 40, 0.08) 0 1px, transparent 1px 9px),
+    radial-gradient(circle at 30% 26%, rgba(255, 225, 40, 0.2), transparent 58%),
+    #14160f;
+}
+.ef-mus__cover-fallback b { font-family: var(--ef-font-en); font-size: 26px; font-weight: 700; letter-spacing: 0.18em; }
+.ef-mus__cover-bar {
+  position: absolute; left: 0; right: 0; bottom: 0; z-index: 2;
+  display: flex; align-items: center; justify-content: space-between;
+  height: 32px; padding: 0 12px;
+  background: linear-gradient(0deg, rgba(6, 8, 6, 0.94), rgba(6, 8, 6, 0));
+  font-family: var(--ef-font-mono); font-size: 8px; font-weight: 700; letter-spacing: 0.12em;
+  color: var(--ef-mus-paper);
+}
+
+/* ---- 右侧：单张控制面板，信息 / 走带 / 曲库都在同一张纸上 ---- */
+.ef-mus__panel {
+  --ef-mus-shape: polygon(0 0, calc(100% - var(--ef-mus-notch)) 0,
+    calc(100% - var(--ef-mus-notch) + var(--ef-mus-cut)) var(--ef-mus-cut), 100% var(--ef-mus-cut),
+    100% 100%, 0 100%);
+
+  position: absolute; left: 660px; top: 120px; width: 480px; height: var(--ef-mus-panel-h); z-index: 5;
+  display: flex; flex-direction: column; padding: var(--ef-mus-rim);
+  color: var(--ef-mus-ink);
+  box-shadow: 0 26px 46px rgba(0, 0, 0, 0.42);
+}
+/* 墨色底衬：整张卡的外框，右上随形状一起斜切 */
+.ef-mus__panel::before {
+  content: ""; position: absolute; inset: 0; z-index: 1; pointer-events: none;
+  background: var(--ef-mus-ink);
+  clip-path: var(--ef-mus-shape);
+}
+/* 纸面：单独一层，比底衬内缩一圈露出边框；模式签放在这一层后面，只露出卡片外的一截 */
+.ef-mus__panel::after {
+  content: ""; position: absolute; inset: var(--ef-mus-rim); z-index: 1; pointer-events: none;
+  background:
+    repeating-linear-gradient(0deg, rgba(21, 23, 14, 0.018) 0 1px, transparent 1px 4px),
+    linear-gradient(158deg, #f7f7ef, #e1e3d5);
+  clip-path: var(--ef-mus-shape);
+}
+.ef-mus__info {
+  position: relative; z-index: 2; flex: none;
+  height: var(--ef-mus-info-h); padding: 16px 16px 0;
+  overflow: hidden;
+  transition: height 0.34s cubic-bezier(0.2, 0.7, 0.2, 1);
+}
+.ef-mus__info-mark {
+  position: absolute; right: 2px; bottom: -10px; z-index: 0;
+  font-family: var(--ef-font-en); font-size: 96px; font-weight: 700; line-height: 0.8;
+  letter-spacing: -0.02em; color: rgba(21, 23, 14, 0.045);
+  pointer-events: none; white-space: nowrap;
+}
+.ef-mus__info-head {
+  position: relative; z-index: 1;
+  display: flex; flex-direction: column; gap: 6px;
+  margin: 0; min-width: 0;
+}
+.ef-mus__info-kicker {
+  font-family: var(--ef-font-mono); font-size: 12px; font-weight: 900; line-height: 1;
+  letter-spacing: 0.12em; color: var(--ef-mus-ink);
+}
+.ef-mus__title-band {
+  display: flex; align-items: center; min-height: 44px;
+  margin-right: -16px; padding: 6px 16px 6px 10px;
+  background: repeating-linear-gradient(135deg, rgba(21, 23, 14, 0.16) 0 2px, transparent 2px 7px);
+}
+.ef-mus__title-mask { flex: 1; min-width: 0; overflow: hidden; }
+.ef-mus__title-inner {
+  margin: 0; overflow: hidden; white-space: nowrap; text-overflow: ellipsis;
+  font-size: 30px; font-weight: 900; line-height: 1.06; letter-spacing: 0.01em;
+  color: var(--ef-mus-ink);
+}
+.ef-mus__title-inner i {
+  font-family: var(--ef-font-en); font-style: normal; font-weight: 400;
+  font-size: 28px; color: rgba(21, 23, 14, 0.28); margin: 0 6px;
+}
+.ef-mus__info-rule {
+  display: block; height: 6px; margin: 10px 0 0;
+  background: linear-gradient(90deg,
+    var(--ef-mus-pink) 0 var(--ef-mus-signal-w),
+    var(--ef-mus-yellow) var(--ef-mus-signal-w) calc(var(--ef-mus-signal-w) * 2),
+    var(--ef-mus-cyan) calc(var(--ef-mus-signal-w) * 2) 100%);
+}
+.ef-mus__info-chips {
+  position: relative; z-index: 1;
+  display: flex; align-items: center; flex-wrap: wrap; gap: 7px;
+  margin: 10px 0 0; min-width: 0;
+}
+.ef-mus__chip { display: inline-flex; align-items: stretch; min-width: 0; height: 24px; }
+.ef-mus__chip b {
+  display: inline-flex; align-items: center; padding: 0 8px;
+  background: var(--ef-mus-ink); color: var(--ef-mus-paper);
+  font-family: var(--ef-font-mono); font-size: 6px; font-weight: 700; letter-spacing: 0.14em;
+}
+.ef-mus__chip i {
+  display: inline-flex; align-items: center; max-width: 200px; padding: 0 10px;
+  background: rgba(21, 23, 14, 0.08); color: var(--ef-mus-ink);
+  font-style: normal; font-size: 10.5px; font-weight: 600;
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+
+/* ---- 走带区：单张面板内的一段，浅色纸面 + 细分隔线 ---- */
+.ef-mus__transport {
+  position: relative; z-index: 2; flex: none;
+  height: 106px;
+  border-top: 1px solid var(--ef-mus-ink);
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.38), rgba(21, 23, 14, 0.015));
+}
+.ef-mus__transport-body {
+  height: 100%; min-width: 0;
+  display: flex; flex-direction: column; justify-content: space-between;
+  padding: 9px 16px 10px;
+}
+
+.ef-mus__seek {
+  display: grid; grid-template-columns: 36px minmax(0, 1fr) 36px; align-items: center; gap: 10px;
+}
+.ef-mus__time {
+  font-family: var(--ef-font-mono); font-size: 8px; font-weight: 700; letter-spacing: 0.03em;
+  color: rgba(21, 23, 14, 0.56);
+}
+.ef-mus__time:last-child { text-align: right; }
+/* 音频波形进度条：底层灰条 + 已播放黑条 + 黄色游标 */
+.ef-mus__seekrail {
+  position: relative; height: 34px; display: flex; align-items: center;
+  cursor: url("/mouse/move.cur"), pointer; touch-action: none;
+}
+.ef-mus__seekwave {
+  position: absolute; inset: 0; width: 100%; height: 100%;
+  pointer-events: none;
+}
+.ef-mus__seekrail-thumb {
+  position: absolute; left: 0; top: 50%; z-index: 1; width: 2px; height: 32px;
+  background: var(--ef-mus-yellow);
+  box-shadow: 0 0 0 1px rgba(21, 23, 14, 0.55), 0 0 7px rgba(255, 225, 40, 0.6);
+  transform: translate(-50%, -50%);
+  transition: background-color 0.12s, box-shadow 0.12s;
+}
+.ef-mus__seekrail:hover .ef-mus__seekrail-thumb,
+.ef-mus__seekrail:focus-visible .ef-mus__seekrail-thumb {
+  background: #fff36a;
+  box-shadow: 0 0 0 1px var(--ef-mus-ink), 0 0 10px rgba(255, 225, 40, 0.8);
+}
+.ef-mus__seekrail:focus-visible { outline: 1px solid var(--ef-mus-ink); outline-offset: 2px; }
+
+.ef-mus__controls {
+  position: relative; z-index: 1;
+  display: flex; align-items: center; justify-content: center; gap: 8px;
+}
+.ef-mus__ctl {
+  flex: none; display: grid; place-items: center; width: 40px; height: 40px;
+  border: 1px solid var(--ef-mus-ink); border-radius: 4px;
+  background: #cfd2c3; color: var(--ef-mus-ink);
+  box-shadow: inset 0 0 0 2px var(--ef-mus-paper), inset 0 0 0 3px rgba(21, 23, 14, 0.5);
+  transition: background-color 0.13s, color 0.13s;
+}
+.ef-mus__ctl svg { width: 17px; height: 17px; fill: currentColor; }
+.ef-mus__ctl:hover, .ef-mus__ctl:focus-visible {
+  background: #e5e7db; color: #000; outline: none;
+}
+.ef-mus__ctl:focus-visible { outline: 2px solid var(--ef-mus-ink); outline-offset: 2px; }
+.ef-mus__ctl:active { background: #bfc2b2; }
+.ef-mus__ctl--mode { width: 34px; height: 34px; border-radius: 3px; }
+.ef-mus__ctl--mode svg { width: 15px; height: 15px; }
+.ef-mus__ctl--play {
+  width: 48px; height: 48px; border-radius: 4px;
+  background: var(--ef-mus-yellow); color: #10120d;
+}
+.ef-mus__ctl--play svg { width: 22px; height: 22px; }
+.ef-mus__ctl--play:hover, .ef-mus__ctl--play:focus-visible {
+  background: #fff36a; color: #000;
+}
+
+.ef-mus__volume {
+  position: relative;
+  display: flex; align-items: center;
+}
+.ef-mus__vbtn {
+  display: grid; place-items: center; width: 34px; height: 34px;
+  border: 1px solid var(--ef-mus-ink); border-radius: 4px;
+  background: #cfd2c3; color: var(--ef-mus-ink);
+  box-shadow: inset 0 0 0 2px var(--ef-mus-paper), inset 0 0 0 3px rgba(21, 23, 14, 0.5);
+  transition: background-color 0.12s;
+}
+.ef-mus__vbtn:hover, .ef-mus__vbtn:focus-visible { background: #e5e7db; outline: none; }
+.ef-mus__vbtn:focus-visible { outline: 2px solid var(--ef-mus-ink); outline-offset: 2px; }
+.ef-mus__vbtn svg { width: 16px; height: 16px; fill: currentColor; }
+/* 悬停提示：控件上方的小黑签；音量键上方要留给竖滑杆，所以浮得更高 */
+.ef-mus__ctl, .ef-mus__vbtn { position: relative; }
+.ef-mus__ctl::after, .ef-mus__vbtn::after {
+  content: attr(data-tip);
+  position: absolute; left: 50%; bottom: calc(100% + 9px); z-index: 13;
+  transform: translate(-50%, 4px); padding: 4px 8px 3px; pointer-events: none;
+  border: 1px solid var(--ef-mus-ink); border-radius: 2px;
+  background: var(--ef-mus-ink); color: var(--ef-mus-paper);
+  font-family: var(--ef-font-mono); font-size: 8px; font-weight: 700; line-height: 1;
+  letter-spacing: 0.12em; white-space: nowrap;
+  opacity: 0; visibility: hidden;
+  transition: opacity 0.14s, transform 0.14s, visibility 0.14s;
+}
+.ef-mus__ctl:hover::after, .ef-mus__ctl:focus-visible::after,
+.ef-mus__vbtn:hover::after, .ef-mus__vbtn:focus-visible::after {
+  opacity: 1; visibility: visible; transform: translate(-50%, 0);
+}
+.ef-mus__volume .ef-mus__vbtn::after { bottom: calc(100% + 110px); }
+/* 音量滑杆：悬停时从按钮上方竖向弹出 */
+.ef-mus__vrail {
+  position: absolute; left: 50%; bottom: 100%; z-index: 12;
+  width: 34px; height: 100px; padding: 10px 0;
+  display: flex; align-items: flex-end; justify-content: center;
+  border: 1px solid var(--ef-mus-ink); border-radius: 4px;
+  background: #cfd2c3;
+  box-shadow: inset 0 0 0 2px var(--ef-mus-paper), inset 0 0 0 3px rgba(21, 23, 14, 0.5);
+  opacity: 0; visibility: hidden; pointer-events: none;
+  transform: translateX(-50%) translateY(5px);
+  transition: opacity 0.14s ease, transform 0.14s ease, visibility 0.14s;
+  cursor: url("/mouse/move.cur"), pointer; touch-action: none;
+}
+.ef-mus__volume:hover .ef-mus__vrail,
+.ef-mus__volume:focus-within .ef-mus__vrail {
+  opacity: 1; visibility: visible; pointer-events: auto;
+  transform: translateX(-50%) translateY(0);
+}
+.ef-mus__vrail::before {
+  content: ""; position: absolute; top: 10px; bottom: 10px; left: 50%; width: 3px;
+  transform: translateX(-50%);
+  background: rgba(21, 23, 14, 0.24);
+}
+.ef-mus__vrail i { position: relative; display: block; width: 3px; background: var(--ef-mus-ink); }
+.ef-mus__vrail:focus-visible { outline: 2px solid var(--ef-mus-ink); outline-offset: 2px; }
+
+/* ---- 曲库区：同一张面板的下半段；两块磁带签从面板右缘长出 ---- */
+.ef-mus__list {
+  position: relative; z-index: 2; flex: 1; min-height: 0;
+  display: flex; flex-direction: column;
+  border-top: 1px solid var(--ef-mus-ink);
+  overflow: hidden;
+}
+/* 磁带签：藏在卡面之后，与标题下的信号条顶对齐 */
+.ef-mus__tabs {
+  position: absolute; right: -50px; top: 94px; z-index: 0;
+  display: flex; flex-direction: column; gap: 6px;
+}
+.ef-mus__tab {
+  width: 54px; height: 86px; padding: 9px 4px;
+  display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 9px;
+  border: 0; border-radius: 0;
+  background: var(--ef-mus-ink); color: var(--ef-mus-paper);
+  clip-path: polygon(0 0, 100% 0, 100% calc(100% - 14px), calc(100% - 14px) 100%, 0 100%);
+  filter: drop-shadow(4px 4px 0 rgba(0, 0, 0, 0.38));
+  transition: background-color 0.16s, color 0.16s, filter 0.16s;
+}
+.ef-mus__tab svg { display: block; width: 19px; height: 19px; }
+.ef-mus__tab b {
+  font-size: 13px; font-weight: 900; line-height: 1; letter-spacing: 0.04em;
+}
+.ef-mus__tab:not([data-active]):hover { background: #24271b; }
+.ef-mus__tab:hover, .ef-mus__tab:focus-visible {
+  outline: none;
+  filter: drop-shadow(4px 4px 0 rgba(0, 0, 0, 0.45)) drop-shadow(0 0 7px rgba(255, 225, 40, 0.45));
+}
+.ef-mus__tab[data-active] {
+  background: var(--ef-mus-yellow); color: #10120d;
+  filter: drop-shadow(5px 5px 0 rgba(0, 0, 0, 0.45));
+}
+.ef-mus__views { position: relative; flex: 1; min-height: 0; overflow: hidden; }
+.ef-mus__list-mark {
+  position: absolute; right: 4px; bottom: 0; z-index: 0;
+  font-family: var(--ef-font-en); font-size: 88px; font-weight: 700; line-height: 0.8;
+  letter-spacing: -0.03em; white-space: nowrap;
+  color: rgba(21, 23, 14, 0.055); pointer-events: none;
+}
+.ef-mus__view {
+  position: absolute; inset: 0; z-index: 1; overflow-y: auto; overflow-x: hidden;
+  padding: 0 0 4px;
+  scrollbar-width: none;
+  opacity: 0; visibility: hidden; transform: translateY(5px);
+  transition: opacity 0.2s ease, transform 0.2s ease, visibility 0.2s;
+}
+.ef-mus__view[data-active] { opacity: 1; visibility: visible; transform: none; }
+.ef-mus__view::-webkit-scrollbar { display: none; width: 0; height: 0; }
+
+/* 曲目卡：整圈黑色边框，卡片把左侧的黄块压在下面，所以自身带一点左下投影；
+   左侧 gutter 里贴一枚居中的 [ 形小标签，一头连着时间轴、一头贴在卡片中部；
+   选中或悬停时同一位置滑入斜纹黄块，盖住时间轴，上下与卡片齐平、不压到卡片上。 */
+.ef-mus__row {
+  position: relative; z-index: 0;
+  display: grid; grid-template-columns: minmax(0, 1fr) 108px;
+  align-items: center;
+  width: calc(100% - 40px); height: 52px; margin: 0 0 9px 40px;
+  border: 1px solid rgba(21, 23, 14, 0.42);
+  background: rgba(255, 255, 255, 0.34);
+  box-shadow: -5px 4px 9px -3px rgba(10, 12, 8, 0.3);
+  text-align: left; color: var(--ef-mus-ink);
+  transition: background-color 0.14s, border-color 0.18s;
+}
+/* 圆点节点：骑在时间轴上，与卡片垂直居中；z 低于黄块，选中时会被黄块盖住。
+   伪元素不吃全局 * { box-sizing }，2px 描边算在 9px 之外，故 left 取 -19px 让圆心落在轴上。 */
+.ef-mus__row::before {
+  content: ""; position: absolute; left: -19px; top: 50%; z-index: -2; width: 9px; height: 9px;
+  transform: translateY(-50%); pointer-events: none;
+  border-radius: 50%;
+  background: var(--ef-mus-paper); border: 2px solid rgba(21, 23, 14, 0.5);
+  transition: background-color 0.18s, border-color 0.18s;
+}
+.ef-mus__row::after {
+  content: ""; position: absolute; z-index: -1; top: -1px; bottom: -1px; left: -41px;
+  width: 40px;
+  background:
+    linear-gradient(90deg, rgba(10, 12, 8, 0), rgba(10, 12, 8, 0.34)) right center / 9px 100% no-repeat,
+    repeating-linear-gradient(135deg, rgba(21, 23, 14, 0.2) 0 2px, transparent 2px 7px),
+    var(--ef-mus-yellow);
+  transform: translateX(calc(-100% - 30px));
+  transition: transform 0.28s cubic-bezier(0.22, 1, 0.36, 1);
+}
+.ef-mus__row:hover, .ef-mus__row:focus-visible {
+  background: rgba(255, 255, 255, 0.62); outline: none;
+}
+.ef-mus__row:hover::after, .ef-mus__row:focus-visible::after,
+.ef-mus__row[data-active]::after { transform: none; }
+.ef-mus__row[data-active] { border-color: var(--ef-mus-ink); }
+.ef-mus__row-art {
+  position: relative; height: 100%; overflow: hidden;
+  background: linear-gradient(150deg, #d9dccd, #b6baa8);
+  -webkit-mask-image: linear-gradient(270deg, #000 26%, transparent 88%);
+  mask-image: linear-gradient(270deg, #000 26%, transparent 88%);
+}
+.ef-mus__row-art img { display: block; width: 100%; height: 100%; object-fit: cover; }
+.ef-mus__row-no {
+  position: absolute; left: -1px; top: 5px; z-index: 2; pointer-events: none;
+  transform: translateX(-50%);
+  padding: 1px 4px; background: var(--ef-mus-ink); color: var(--ef-mus-paper);
+  font-family: var(--ef-font-mono); font-size: 7px; font-weight: 700; letter-spacing: 0.08em;
+}
+.ef-mus__row-text {
+  display: flex; align-items: center; gap: 5px; min-width: 0;
+  padding-left: 12px;
+}
+.ef-mus__row-name {
+  min-width: 0; overflow: hidden; white-space: nowrap; text-overflow: ellipsis;
+  font-size: 13px; font-weight: 900; line-height: 1.15;
+}
+.ef-mus__row-slash {
+  flex: none; font-family: var(--ef-font-mono); font-size: 9px; color: rgba(21, 23, 14, 0.34);
+}
+.ef-mus__row-artist {
+  flex: none; max-width: 42%; overflow: hidden; white-space: nowrap; text-overflow: ellipsis;
+  font-family: var(--ef-font-mono); font-size: 7.5px; font-style: normal; letter-spacing: 0.04em;
+  color: rgba(21, 23, 14, 0.56);
+}
+.ef-mus__row-mark { display: flex; flex: none; align-items: center; }
+.ef-mus__row[data-active] .ef-mus__row-artist { color: rgba(21, 23, 14, 0.66); }
+.ef-mus__row[data-active] .ef-mus__eq i { background: #10120d; }
+/* 时间轴：贴近卡片左缘的一根竖线，不随卡片滚动，被黄块盖在下面 */
+.ef-mus__list::after {
+  content: ""; position: absolute; left: 28px; top: 2px; bottom: 2px; width: 1px; z-index: -1;
+  background: linear-gradient(180deg, transparent, rgba(21, 23, 14, 0.3) 6%, rgba(21, 23, 14, 0.3) 94%, transparent);
+  pointer-events: none;
+}
+
+.ef-mus__lrc {
+  display: block; width: 100%; padding: 8px 14px;
+  background: none; border: 0;
+  text-align: center; color: rgba(21, 23, 14, 0.42);
+  font-size: 12.5px; font-weight: 600; line-height: 1.5;
+  transition: color 0.2s, font-size 0.2s;
+}
+.ef-mus__lrc:hover, .ef-mus__lrc:focus-visible { color: var(--ef-mus-ink); outline: none; }
+/* 唱到的那行：纯黄色字体放大，不铺任何背景；纸面上靠一圈墨色描边保证可读 */
+.ef-mus__lrc[data-active] {
+  color: var(--ef-mus-yellow); font-size: 15px; font-weight: 900;
+  text-shadow: 1px 0 0 rgba(21, 23, 14, 0.5), -1px 0 0 rgba(21, 23, 14, 0.5),
+    0 1px 0 rgba(21, 23, 14, 0.5), 0 -1px 0 rgba(21, 23, 14, 0.5);
+}
+.ef-mus[data-tab="lyrics"] .ef-mus__lrc { padding: 9px 12px; line-height: 1.65; }
+/* 歌词视图不挂时间轴 */
+.ef-mus[data-tab="lyrics"] .ef-mus__list::after { display: none; }
+
+/* 歌词模式：信息纸只留曲名，走带托盘收紧，歌词区拿到更多高度 */
+.ef-mus[data-tab="lyrics"] .ef-mus__info-chips,
+.ef-mus[data-tab="lyrics"] .ef-mus__info-mark { display: none; }
+.ef-mus[data-tab="lyrics"] .ef-mus__transport-body { padding-top: 6px; padding-bottom: 7px; }
+.ef-mus[data-tab="lyrics"] .ef-mus__ctl { width: 36px; height: 36px; }
+.ef-mus[data-tab="lyrics"] .ef-mus__ctl--play { width: 44px; height: 44px; }
+.ef-mus[data-tab="lyrics"] .ef-mus__ctl--mode { width: 32px; height: 32px; }
+.ef-mus__lrc-note {
+  padding: 18px 12px; font-family: var(--ef-font-mono); font-size: 9px; letter-spacing: 0.1em;
+  color: var(--ef-mus-muted);
+}
+.ef-mus__placeholder {
+  height: 100%; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 7px;
+  padding: 16px; text-align: center; font-size: 12px; color: var(--ef-mus-muted);
+}
+.ef-mus__placeholder b {
+  font-family: var(--ef-font-mono); font-size: 10px; font-weight: 700; letter-spacing: 0.16em;
+  color: var(--ef-mus-ink);
+}
+.ef-mus__placeholder button {
+  margin-top: 5px; height: 30px; padding: 0 14px;
+  border: 1px solid var(--ef-mus-ink); border-radius: 7px;
+  background: linear-gradient(160deg, #f6f6ee, #d9dccd); color: var(--ef-mus-ink);
+  box-shadow: 2px 2px 0 rgba(21, 23, 14, 0.18);
+  font-size: 11px; font-weight: 700;
+}
+.ef-mus__placeholder button:hover { background: var(--ef-mus-yellow); }
+.ef-mus__spinner {
+  width: 24px; height: 24px; border-radius: 50%;
+  border: 2px solid rgba(21, 23, 14, 0.18); border-top-color: var(--ef-mus-ink);
+  animation: efMusSpinRing 0.9s linear infinite;
+}
+
+/* ---- 均衡器 ---- */
+.ef-mus__eq { display: flex; align-items: flex-end; gap: 2px; height: 13px; }
+.ef-mus__eq i {
+  display: block; width: 2px; height: 100%; background: var(--ef-mus-yellow);
+  transform: scaleY(0.24); transform-origin: bottom;
+  animation: efMusEq 1.05s ease-in-out infinite;
+  animation-play-state: paused;
+}
+.ef-mus__eq i:nth-child(2) { animation-delay: -0.24s; }
+.ef-mus__eq i:nth-child(3) { animation-delay: -0.52s; }
+.ef-mus__eq i:nth-child(4) { animation-delay: -0.12s; }
+.ef-mus__eq i:nth-child(5) { animation-delay: -0.4s; }
+.ef-mus[data-playing="true"] .ef-mus__eq i { animation-play-state: running; }
+.ef-mus__eq--small { height: 10px; gap: 2px; }
+.ef-mus__eq--small i { width: 2px; }
+
+/* ---- 关闭键与提示 ---- */
+/* 关闭键贴在卡片右缘外，露出的宽度与下方模式签完全一致（50px），右缘同列；红底灰斜纹 */
+.ef-mus__close {
+  position: absolute; left: 1139px; top: 155px; z-index: 6;
+  display: grid; place-items: center; width: 51px; height: 54px; padding: 13px;
+  border: 1px solid var(--ef-mus-ink); border-radius: 4px;
+  background:
+    repeating-linear-gradient(135deg, rgba(133, 138, 128, 0.55) 0 2px, transparent 2px 7px),
+    var(--ef-mus-red);
+  color: var(--ef-mus-paper);
+  box-shadow: inset 0 0 0 2px var(--ef-mus-paper), inset 0 0 0 3px rgba(21, 23, 14, 0.5);
+  transition: background-color 0.14s, color 0.14s, transform 0.14s;
+}
+.ef-mus__close svg { display: block; width: 100%; height: 100%; }
+.ef-mus__close:hover { --ef-mus-red: #f0574a; transform: scale(1.06); }
+.ef-mus__close:active { transform: scale(0.96); }
+.ef-mus__close:focus-visible {
+  outline: 2px solid var(--ef-mus-yellow); outline-offset: 3px;
+}
+.ef-mus__hint {
+  position: absolute; left: 660px; top: 742px;
+  font-family: var(--ef-font-mono); font-size: 8px; font-weight: 600; letter-spacing: 0.16em;
+  color: rgba(242, 241, 233, 0.38);
+}
+
+/* ---- 窄屏：封套与唱片在上，档案卡依次向下 ---- */
+@media (max-width: 900px) {
+  .ef-mus__frame { padding: 10px; place-items: stretch; }
+  .ef-mus__fit { width: 100%; height: 100%; }
+  .ef-mus__board {
+    display: flex; flex-direction: column; gap: 12px;
+    width: 100%; height: 100%;
+    padding: 10px; overflow-y: auto; overflow-x: hidden;
+    transform: none;
+  }
+  .ef-mus__glow { left: 50%; top: 80px; width: 340px; height: 340px; margin-left: -170px; }
+  .ef-mus__deck {
+    position: relative; inset: auto; order: 1; flex: none;
+    width: 100%; height: 350px;
+  }
+  .ef-mus__watermark { display: none; }
+  .ef-mus__badge { left: 10px; top: 8px; height: 30px; padding: 0 10px; font-size: 14px; }
+  .ef-mus__badge svg { width: 14px; height: 14px; }
+  .ef-mus__spectrum { left: calc(50% - 192px); top: -12px; width: 384px; height: 384px; }
+  .ef-mus__player { left: calc(50% - 130px); top: 50px; width: 260px; height: 260px; }
+  .ef-mus__cover { left: calc(50% - 200px); top: 80px; width: 200px; height: 200px; border-radius: 3px; }
+  .ef-mus__vinyl-label { left: calc(50% - 46px); top: 134px; width: 92px; height: 92px; }
+  .ef-mus__vinyl-label b { font-size: 18px; }
+  .ef-mus__cover-bar { height: 24px; padding: 0 6px; font-size: 6px; }
+  .ef-mus__cover-fallback b { font-size: 18px; }
+  .ef-mus__panel {
+    position: relative; inset: auto; order: 2; width: auto; height: auto;
+    --ef-mus-notch: 150px; --ef-mus-cut: 14px;
+  }
+  .ef-mus__info { height: auto; padding: 14px 14px 14px; }
+  .ef-mus__info-mark { font-size: 84px; bottom: -14px; }
+  .ef-mus__info-kicker { font-size: 10px; }
+  .ef-mus__title-band { min-height: 42px; margin-right: -14px; padding: 5px 14px 5px 9px; }
+  .ef-mus__info-rule { margin: 9px 0 0; }
+  .ef-mus__info-chips { margin: 9px 0 0; gap: 6px; }
+  .ef-mus__transport { height: auto; min-height: 92px; }
+  .ef-mus__transport-body { padding: 8px 12px 9px; }
+  .ef-mus__list { min-height: 300px; flex: 1 1 auto; }
+  .ef-mus__row { grid-template-columns: minmax(0, 1fr) 92px; height: 48px; margin-bottom: 8px; }
+  .ef-mus__list-mark { font-size: 64px; }
+  .ef-mus__tabs {
+    position: relative; inset: auto; z-index: 3; margin: 0; padding: 8px 8px 6px;
+    flex-direction: row; align-items: center; justify-content: flex-end; gap: 5px;
+  }
+  .ef-mus__tab {
+    width: auto; min-height: 0; height: 26px; padding: 0 9px;
+    flex-direction: row; align-items: center; gap: 5px;
+    border: 0; border-radius: 0;
+    background: var(--ef-mus-ink); color: var(--ef-mus-paper);
+    clip-path: polygon(0 0, 100% 0, 100% calc(100% - 7px), calc(100% - 7px) 100%, 0 100%);
+    filter: none;
+  }
+  .ef-mus__tab b { font-size: 11px; font-weight: 700; letter-spacing: 0; }
+  .ef-mus__tab svg { width: 14px; height: 14px; }
+  .ef-mus__tab:not([data-active]):hover { background: #24271b; }
+  .ef-mus__tab:hover, .ef-mus__tab:focus-visible { filter: none; }
+  .ef-mus__tab:focus-visible { filter: drop-shadow(0 0 4px rgba(255, 225, 40, 0.85)); }
+  .ef-mus__tab[data-active] { background: var(--ef-mus-yellow); color: #10120d; filter: none; }
+  .ef-mus__title-inner { font-size: 26px; }
+  .ef-mus__title-inner i { font-size: 24px; }
+  .ef-mus__ctl { width: 40px; height: 40px; }
+  .ef-mus__ctl--mode { width: 34px; height: 34px; }
+  .ef-mus__ctl--play { width: 52px; height: 52px; }
+  .ef-mus__ctl--play svg { width: 23px; height: 23px; }
+  .ef-mus__vbtn { width: 34px; height: 34px; }
+  .ef-mus__close { position: fixed; left: auto; right: 16px; top: 16px; width: 40px; height: 40px; padding: 10px; }
+  .ef-mus__hint { display: none; }
+}
+@media (max-width: 520px) {
+  .ef-mus__board { gap: 10px; padding: 8px; }
+  .ef-mus__deck { height: 330px; }
+  .ef-mus__spectrum { left: calc(50% - 170px); top: -10px; width: 340px; height: 340px; }
+  .ef-mus__player { left: calc(50% - 115px); top: 45px; width: 230px; height: 230px; }
+  .ef-mus__cover { left: calc(50% - 180px); top: 70px; width: 180px; height: 180px; }
+  .ef-mus__vinyl-label { left: calc(50% - 42px); top: 118px; width: 84px; height: 84px; }
+  .ef-mus__vinyl-label b { font-size: 15px; }
+  .ef-mus__label-hole { width: 7px; height: 7px; }
+  .ef-mus__cover-bar { display: none; }
+  .ef-mus__badge { top: 6px; height: 28px; font-size: 13px; }
+  .ef-mus__badge small { display: none; }
+  .ef-mus__info { padding: 12px 12px 12px; }
+  .ef-mus__info-mark { display: none; }
+  .ef-mus__info-kicker { font-size: 9px; }
+  .ef-mus__title-band { min-height: 38px; margin-right: -12px; padding: 4px 12px 4px 8px; }
+  .ef-mus__info-rule { margin: 8px 0 0; }
+  .ef-mus__info-chips { margin: 8px 0 0; gap: 5px; }
+  .ef-mus__chip { height: 22px; }
+  .ef-mus__chip b { padding: 0 6px; font-size: 5.5px; }
+  .ef-mus__chip i { padding: 0 8px; font-size: 9.5px; max-width: 160px; }
+  .ef-mus__title-inner { font-size: 22px; }
+  .ef-mus__title-inner i { font-size: 20px; margin: 0 4px; }
+  .ef-mus__seek { margin: 0; grid-template-columns: 32px minmax(0, 1fr) 32px; gap: 7px; }
+  .ef-mus__controls { margin: 0; gap: 6px; }
+  .ef-mus__transport { min-height: 86px; }
+  .ef-mus__transport-body { padding: 6px 9px 8px; }
+  .ef-mus__ctl { width: 38px; height: 38px; }
+  .ef-mus__ctl svg { width: 17px; height: 17px; }
+  .ef-mus__ctl--play { width: 50px; height: 50px; }
+  .ef-mus__ctl--play svg { width: 22px; height: 22px; }
+  .ef-mus__ctl--mode { width: 32px; height: 32px; }
+  .ef-mus__vrail { display: none; }
+  .ef-mus__vbtn { width: 34px; height: 34px; }
+  .ef-mus__tabs { padding: 6px 6px 5px; }
+  .ef-mus__tab { height: 24px; padding: 0 8px; }
+  .ef-mus__tab b { font-size: 10px; }
+  .ef-mus__row { grid-template-columns: minmax(0, 1fr) 72px; height: 44px; }
+  .ef-mus__row-text { padding-left: 9px; }
+  .ef-mus__row-name { font-size: 12px; }
+  .ef-mus__list { min-height: 284px; }
+  .ef-mus__close { right: 12px; top: 12px; width: 36px; height: 36px; padding: 9px; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .ef-mus__vinyl, .ef-mus__cover img, .ef-mus__spinner { animation: none; }
+  .ef-mus__eq i { animation: none; transform: scaleY(0.5); }
+  .ef-mus__info, .ef-mus__transport, .ef-mus__list, .ef-mus__tab,
+  .ef-mus__view, .ef-mus__seekrail-thumb, .ef-mus__cover, .ef-mus__ctl { transition: none; }
+  .ef-mus__row, .ef-mus__row::after { transition: none; }
+}

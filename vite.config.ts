@@ -1,9 +1,11 @@
 import { defineConfig } from "vite";
 import react from "@vitejs/plugin-react";
 import sitemap from "vite-plugin-sitemap";
+import type { IncomingMessage, ServerResponse } from "node:http";
 import type { HtmlTagDescriptor, Plugin } from "vite";
 import { SITE_CONFIG } from "./src/config/site-config.ts";
 import { SITE_LINKS } from "./src/config/link-config.ts";
+import { handleFeedsRequest } from "./server/feeds.ts";
 
 // base './' 让纯静态产物可以部署在任意子路径下
 
@@ -92,9 +94,43 @@ function siteSeoPlugin(): Plugin {
   };
 }
 
+// 本地 dev / preview 没有平台函数，直接用共享聚合逻辑响应 /api/feeds，
+// 保证本地与部署后的实时订阅走同一条代码路径。
+function feedsApiPlugin(): Plugin {
+  const middleware = async (req: IncomingMessage, res: ServerResponse, next: () => void) => {
+    const url = new URL(req.url ?? "/", `http://${req.headers.host ?? "localhost"}`);
+    if (url.pathname !== "/api/feeds") {
+      next();
+      return;
+    }
+    try {
+      const request = new Request(url, { method: req.method ?? "GET" });
+      const response = await handleFeedsRequest(request);
+      res.statusCode = response.status;
+      response.headers.forEach((value, key) => res.setHeader(key, value));
+      res.end(Buffer.from(await response.arrayBuffer()));
+    } catch (error) {
+      console.error("feeds dev api failed", error);
+      res.statusCode = 500;
+      res.end();
+    }
+  };
+
+  return {
+    name: "feeds-api",
+    configureServer(server) {
+      server.middlewares.use(middleware);
+    },
+    configurePreviewServer(server) {
+      server.middlewares.use(middleware);
+    },
+  };
+}
+
 export default defineConfig({
   plugins: [
     siteSeoPlugin(),
+    feedsApiPlugin(),
     // sitemap.xml + robots.txt 交给维护中的插件生成，路由发现/转义等细节不用自己兜底
     sitemap({ hostname: SITE_CONFIG.siteUrl, changefreq: "monthly", generateRobotsTxt: true }),
     react(),

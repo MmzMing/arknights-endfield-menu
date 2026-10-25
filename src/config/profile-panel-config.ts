@@ -29,13 +29,16 @@ export interface TechStackGroup {
 }
 
 export interface MusicPlaceholder {
-  eyebrow: string;
   title: string;
   artist: string;
   /** 播放器主标签（暂停播放） */
   label: string;
   /** 主标签英文 */
   labelEn: string;
+  /** 未在播放时的主标签 */
+  labelIdle: string;
+  /** 未在播放时的主标签英文 */
+  labelEnIdle: string;
 }
 
 export interface ProfilePanelContent {
@@ -123,11 +126,12 @@ export const PROFILE_PANEL_CONFIG: ProfilePanelContent = {
   railBig: "PROFILE",
   techStack: TECH_STACK,
   music: {
-    eyebrow: "PLAYBACK // 播放器",
     title: "TALOS-II RADIO",
     artist: "MMZMING",
     label: "暂停播放",
     labelEn: "PAUSE PLAYBACK",
+    labelIdle: "开始播放",
+    labelEnIdle: "START PLAYBACK",
   },
   siteLabel: "站点运行时间",
   bio: "在代码与像素之间，搭一座自己的小站。",

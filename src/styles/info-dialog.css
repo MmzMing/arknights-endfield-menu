@@ -233,6 +233,44 @@
 }
 .ef-idlg__link:hover span, .ef-idlg__link:focus-visible span { text-decoration: underline; }
 
+/* ---- 实时订阅状态：抓取中/接口不可用提示、失败源列表与重试按钮。 ---- */
+.ef-idlg__notice {
+  display: flex; align-items: center; gap: 12px; flex: none;
+  margin-top: 12px; padding: 7px 10px;
+  border-left: 4px solid var(--ef-idlg-yellow);
+  background: rgba(16,18,13,0.07);
+  font-size: 12px; line-height: 1.45; letter-spacing: 0.02em;
+}
+.ef-idlg__notice > span { flex: 1 1 auto; min-width: 0; }
+.ef-idlg__notice--error { border-left-color: #ff6fe0; }
+.ef-idlg__retry {
+  flex: none; padding: 4px 10px; border: 1px solid #10120d; background: transparent;
+  color: #10120d; font-family: var(--ef-font-mono); font-size: 9px; font-weight: 700;
+  letter-spacing: 0.08em; cursor: pointer; transition: background-color 0.12s, color 0.12s;
+}
+.ef-idlg__retry:hover, .ef-idlg__retry:focus-visible { background: var(--ef-idlg-yellow); color: #10120d; }
+.ef-idlg__failures {
+  display: flex; flex-direction: column; flex: none; min-height: 0;
+  margin-top: 10px; border-top: 1px solid rgba(16,18,13,0.62);
+}
+.ef-idlg__failures-head {
+  display: flex; align-items: baseline; gap: 10px; padding: 7px 7px 5px;
+  font-size: 11px; font-weight: 700; letter-spacing: 0.08em;
+}
+.ef-idlg__failures-head > span { flex: 1 1 auto; opacity: 0.55; font-family: var(--ef-font-mono); font-size: 9px; }
+.ef-idlg__failures-list { max-height: 96px; overflow-y: auto; scrollbar-width: thin; }
+.ef-idlg__failures-list::-webkit-scrollbar { width: 6px; }
+.ef-idlg__failures-list::-webkit-scrollbar-thumb { background: rgba(16,18,13,0.35); }
+.ef-idlg__failure {
+  display: flex; align-items: baseline; gap: 10px; padding: 5px 7px;
+  border-bottom: 1px solid rgba(16,18,13,0.22);
+  color: inherit; text-decoration: none; font-size: 11px;
+}
+a.ef-idlg__failure { cursor: url("/mouse/link.cur"), pointer; }
+.ef-idlg__failure b { flex: none; max-width: 40%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.ef-idlg__failure span { flex: 1 1 auto; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 10px; opacity: 0.62; }
+a.ef-idlg__failure:hover b, a.ef-idlg__failure:focus-visible b { text-decoration: underline; }
+
 /* ---- 分组卡片（技术栈）：左侧是分组 label（列表），右侧是技术名的多列卡片；整块可滚动。 ---- */
 .ef-idlg__groups { display: flex; flex-direction: column; min-height: 0; margin-top: 16px; overflow-y: auto; scrollbar-width: thin; }
 .ef-idlg__groups::-webkit-scrollbar { width: 6px; }

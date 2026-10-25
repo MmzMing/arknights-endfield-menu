@@ -1,70 +1,25 @@
-// 抓取「本站 + 全部友链」的 RSS/Atom，聚合成顶栏订阅列表读取的快照 src/assets/rss-feed.ts。
-// Node 侧直接请求各源（无浏览器 CORS 限制），解析交给 @extractus/feed-extractor。
+// 抓取「本站 + 全部友链」的 RSS/Atom，生成 src/assets/rss-feed.ts 快照。
+// 实时列表由 /api/feeds 提供；这份快照只在接口不可用时兜底。
 // 运行：pnpm feeds:update
 import { writeFileSync } from "node:fs";
 import { join } from "node:path";
-import { extract } from "@extractus/feed-extractor";
 import { FEED_CONFIG } from "../src/config/feeds.ts";
-import { FRIEND_LINKS } from "../src/config/friend-links.ts";
-import { toFeedItems } from "../src/lib/feed.ts";
+import { aggregateFeeds } from "../server/feeds.ts";
 
 const root = new URL("..", import.meta.url).pathname.replace(/^\/([A-Za-z]:)/, "$1");
-const UA =
-  "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36";
 
-const sources = [
-  { name: FEED_CONFIG.selfName, url: FEED_CONFIG.selfUrl },
-  ...FRIEND_LINKS.flatMap((friend) => (friend.rss ? [{ name: friend.name, url: friend.rss }] : [])),
-].filter((source, index, all) => all.findIndex((s) => s.url === source.url) === index);
+const snapshot = await aggregateFeeds({
+  attempts: FEED_CONFIG.attempts,
+  concurrency: FEED_CONFIG.concurrency,
+  maxPerSite: FEED_CONFIG.maxPerSite,
+  timeoutMs: FEED_CONFIG.timeoutMs,
+  onSource: ({ name, count, reason }) => {
+    if (reason === undefined) console.log(`OK   ${name} (${count})`);
+    else console.log(`FAIL ${name} (${reason})`);
+  },
+});
 
-async function fetchSource(source) {
-  for (let attempt = 1; attempt <= FEED_CONFIG.attempts; attempt++) {
-    const controller = new AbortController();
-    const timer = setTimeout(() => controller.abort(), FEED_CONFIG.timeoutMs);
-    try {
-      const feed = await extract(
-        source.url,
-        { useISODateFormat: true, descriptionMaxLen: 0 },
-        (url) => fetch(url, { signal: controller.signal, headers: { "user-agent": UA } }),
-      );
-      const items = toFeedItems(feed.entries, source.name, FEED_CONFIG.maxPerSite);
-      if (items.length > 0) {
-        console.log(`OK   ${source.name} (${items.length})`);
-        return items;
-      }
-    } catch (error) {
-      if (attempt === FEED_CONFIG.attempts) {
-        console.log(`FAIL ${source.name} ${source.url} (${String(error).slice(0, 80)})`);
-      }
-    } finally {
-      clearTimeout(timer);
-    }
-  }
-  return [];
-}
-
-const results = [];
-let cursor = 0;
-async function worker() {
-  while (cursor < sources.length) {
-    const source = sources[cursor++];
-    const items = await fetchSource(source);
-    if (items.length > 0) results.push({ name: source.name, items });
-  }
-}
-await Promise.all(Array.from({ length: FEED_CONFIG.concurrency }, worker));
-
-const items = results
-  .flatMap((result) => result.items)
-  .sort((a, b) => b.date.localeCompare(a.date));
-
-const snapshot = {
-  generatedAt: new Date().toISOString(),
-  sites: results.length,
-  items,
-};
-
-if (items.length === 0) {
+if (snapshot.items.length === 0) {
   console.error("no items fetched; keeping the existing snapshot");
   process.exit(1);
 }
@@ -76,4 +31,8 @@ export const RSS_SNAPSHOT: FeedSnapshot = ${JSON.stringify(snapshot, null, 2)};
 `;
 
 writeFileSync(join(root, "src", "assets", "rss-feed.ts"), out);
-console.log(`\nrss-feed.ts: ${items.length} items from ${results.length}/${sources.length} feeds`);
+console.log(
+  `\nrss-feed.ts: ${snapshot.items.length} items from ${snapshot.sites}/${snapshot.total} feeds; ${
+    snapshot.failures?.length ?? 0
+  } failed`,
+);

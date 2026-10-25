@@ -47,6 +47,19 @@ export interface DialogGroup {
   items: DialogGroupItem[];
 }
 
+/** 实时数据状态提示（RSS 弹窗）：抓取中或接口不可用。 */
+export interface DialogNotice {
+  tone: "loading" | "error";
+  text: string;
+}
+
+/** 抓取失败的数据源（RSS 弹窗的独立失败区）。 */
+export interface DialogFailure {
+  name: string;
+  reason: string;
+  url?: string;
+}
+
 export interface DialogContent {
   title: string;
   subtitle: string;
@@ -58,6 +71,14 @@ export interface DialogContent {
   links?: DialogLink[];
   /** 分组卡片（技术栈）：每组一行 label + 多列 items 卡片 */
   groups?: DialogGroup[];
+  /** 实时数据状态提示（RSS 弹窗）：抓取中 / 接口不可用 */
+  notice?: DialogNotice;
+  /** 抓取失败的数据源列表（RSS 弹窗） */
+  failures?: DialogFailure[];
+  /** 失败区与错误提示的重试动作 */
+  onRetry?: () => void;
+  /** 重试请求进行中：按钮暂不渲染 */
+  isRetrying?: boolean;
 }
 
 /** 关闭态落地时钟的文案；时间本身读取本地时间，不在这里配置。 */
@@ -196,9 +217,6 @@ export const MENU_CONTENT: MenuContent = {
         image: link.image,
       }]),
     ),
-    plan: dialog("INDUSTRIAL PLAN", "工业计划", "规划塔卫工业区的生产线与资源调度，让每一份原料都物尽其用。", [
-      { label: "产能", value: "—" }, { label: "队列", value: "—" },
-    ]),
     brief: dialog("INDUSTRIAL BRIEF", "工业简报", "工业区运转状况的实时简报：产出、消耗与异常事件汇总。", [
       { label: "效率", value: "—" }, { label: "告警", value: "0" },
     ]),
@@ -239,12 +257,48 @@ export function friendsDialog(): DialogContent {
   };
 }
 
-/** RSS 弹窗：条目来自构建期聚合快照（本站 + 全部友链的 RSS，pnpm feeds:update 刷新）。 */
-export function feedDialog(feed: FeedSnapshot): DialogContent {
+function formatFeedTime(value: string): string {
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return "";
+  return date.toLocaleString("zh-CN", {
+    month: "2-digit",
+    day: "2-digit",
+    hour: "2-digit",
+    minute: "2-digit",
+    hour12: false,
+  });
+}
+
+/** RSS 弹窗：实时接口聚合的条目与失败源；接口不可用时回退到构建期快照。 */
+export function feedDialog(
+  feed: FeedSnapshot,
+  status: "loading" | "ready" | "error",
+  isLive: boolean,
+  onRetry: () => void,
+): DialogContent {
+  const failures = feed.failures ?? [];
+  const total = feed.total ?? feed.sites + failures.length;
+  const updated = formatFeedTime(feed.generatedAt);
+  const summary = [
+    `已获取 ${feed.sites}/${total} 个站点，共 ${feed.items.length} 篇更新`,
+    failures.length > 0 ? `${failures.length} 个源暂时无法获取` : "",
+    updated.length > 0 ? `更新于 ${updated}` : "",
+  ].filter((part) => part.length > 0);
+
+  const notice: DialogNotice | undefined =
+    status === "loading"
+      ? { tone: "loading", text: isLive ? "正在刷新订阅…" : "正在获取最新订阅…" }
+      : status === "error"
+        ? {
+            tone: "error",
+            text: isLive ? "刷新失败，当前显示上次获取的数据。" : "实时订阅接口不可用，当前显示构建时快照。",
+          }
+        : undefined;
+
   return {
     title: "RSS FEED",
     subtitle: "订阅更新",
-    description: `来自 ${feed.sites} 个站点的最新 ${feed.items.length} 篇更新，点击标题打开原文。`,
+    description: `${summary.join("，")}。`,
     meta: [],
     links: feed.items.map((item) => ({
       title: item.title,
@@ -252,6 +306,10 @@ export function feedDialog(feed: FeedSnapshot): DialogContent {
       note: item.date,
       source: item.source,
     })),
+    notice,
+    failures: failures.map((failure) => ({ ...failure })),
+    onRetry,
+    isRetrying: status === "loading",
   };
 }
 

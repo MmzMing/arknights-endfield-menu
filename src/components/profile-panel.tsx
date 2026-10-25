@@ -3,6 +3,7 @@ import { gsap } from "gsap";
 import { createTopoContourPaths } from "../lib/topo-contours";
 import { cssVars } from "../lib/label-svg";
 import { formatMonthDay, getSiteCycle, type SiteCycle } from "../lib/site-time";
+import type { MusicPlayerApi } from "../hooks/use-music-player";
 import type { MusicPlaceholder, ProfilePanelContent, TechStackMetric } from "../config/profile-panel-config";
 import type { PlayerContent } from "./player-badge";
 import "../styles/profile-panel.css";
@@ -145,26 +146,50 @@ function TechRow({ item }: { item: TechStackMetric }) {
   );
 }
 
-function MusicCard({ music, cardRef }: { music: MusicPlaceholder; cardRef: RefObject<HTMLElement | null> }) {
+function MusicCard({
+  music,
+  player,
+  cardRef,
+}: {
+  music: MusicPlaceholder;
+  player: MusicPlayerApi;
+  cardRef: RefObject<HTMLButtonElement | null>;
+}) {
+  const playing = player.isPlaying;
+  const track = player.track;
   return (
-    <section className="ef-prof__music" ref={cardRef} aria-label="音乐播放器（界面预览）">
-      <div className="ef-prof__music-inner">
+    <button
+      className="ef-prof__music"
+      ref={cardRef}
+      type="button"
+      aria-label={playing ? `${music.label}：${track?.name ?? music.title}` : `${music.labelIdle}：${track?.name ?? music.title}`}
+      onClick={player.toggle}
+    >
+      <span className="ef-prof__music-inner">
         <svg className="ef-prof__music-lines" viewBox="0 0 620 460" preserveAspectRatio="none" aria-hidden="true">
           <use href="#ef-prof-contours" />
         </svg>
-        <div className="ef-prof__pause" aria-hidden="true">
-          <i />
-          <i />
-        </div>
-        <div className="ef-prof__music-copy">
-          <b>{music.label}</b>
-          <small>{music.labelEn}</small>
+        <span className="ef-prof__pause" aria-hidden="true">
+          {playing ? (
+            <>
+              <i />
+              <i />
+            </>
+          ) : (
+            <svg viewBox="0 0 24 24">
+              <path d="M7 4.2 19.5 12 7 19.8Z" />
+            </svg>
+          )}
+        </span>
+        <span className="ef-prof__music-copy">
+          <b>{playing ? music.label : music.labelIdle}</b>
+          <small>{playing ? music.labelEn : music.labelEnIdle}</small>
           <span>
-            {music.title} · {music.artist}
+            {track ? `${track.name} · ${track.artist}` : `${music.title} · ${music.artist}`}
           </span>
-        </div>
-      </div>
-    </section>
+        </span>
+      </span>
+    </button>
   );
 }
 
@@ -222,18 +247,20 @@ function ProfileCard({
 export function ProfilePanel({
   player,
   panel,
+  music,
   startDate,
   onClose,
 }: {
   player: PlayerContent;
   panel: ProfilePanelContent;
+  music: MusicPlayerApi;
   startDate: string;
   onClose: () => void;
 }) {
   const dimRef = useRef<HTMLDivElement>(null);
   const railRef = useRef<HTMLElement>(null);
   const pageRef = useRef<HTMLElement>(null);
-  const musicRef = useRef<HTMLElement>(null);
+  const musicRef = useRef<HTMLButtonElement>(null);
   const cardRef = useRef<HTMLElement>(null);
   const closeRef = useRef<HTMLButtonElement>(null);
   const rootRef = useRef<HTMLDivElement>(null);
@@ -399,7 +426,7 @@ export function ProfilePanel({
               </div>
             </section>
 
-            <MusicCard music={panel.music} cardRef={musicRef} />
+            <MusicCard music={panel.music} player={music} cardRef={musicRef} />
             <ProfileCard player={player} panel={panel} cycle={cycle} cardRef={cardRef} />
 
             <button className="ef-prof__close" ref={closeRef} type="button" onClick={requestClose} title="关闭" aria-label="关闭个人档案">

@@ -107,6 +107,16 @@ function DialogFace({ content, isStatic }: { content: DialogContent; isStatic: b
           </div>
         </div>
         <p className="ef-idlg__body">{content.description}</p>
+        {content.notice && (
+          <div className={`ef-idlg__notice ef-idlg__notice--${content.notice.tone}`} role="status">
+            <span>{content.notice.text}</span>
+            {content.notice.tone === "error" && content.onRetry && !content.isRetrying && (
+              <button type="button" className="ef-idlg__retry" onClick={content.onRetry}>
+                重试
+              </button>
+            )}
+          </div>
+        )}
         {content.image && (
           <div className="ef-idlg__media">
             <img src={content.image} alt={content.subtitle} />
@@ -151,6 +161,40 @@ function DialogFace({ content, isStatic }: { content: DialogContent; isStatic: b
               </a>
             ))}
           </div>
+        )}
+        {content.failures && content.failures.length > 0 && (
+          <section className="ef-idlg__failures">
+            <header className="ef-idlg__failures-head">
+              <b>暂时无法获取</b>
+              <span>{content.failures.length}</span>
+              {content.onRetry && !content.isRetrying && content.notice?.tone !== "error" && (
+                <button type="button" className="ef-idlg__retry" onClick={content.onRetry}>
+                  重新获取
+                </button>
+              )}
+            </header>
+            <div className="ef-idlg__failures-list">
+              {content.failures.map((failure, index) =>
+                failure.url ? (
+                  <a
+                    className="ef-idlg__failure"
+                    href={failure.url}
+                    key={`${failure.name}:${index}`}
+                    rel="noopener noreferrer"
+                    target="_blank"
+                  >
+                    <b>{failure.name}</b>
+                    <span>{failure.reason}</span>
+                  </a>
+                ) : (
+                  <div className="ef-idlg__failure" key={`${failure.name}:${index}`}>
+                    <b>{failure.name}</b>
+                    <span>{failure.reason}</span>
+                  </div>
+                ),
+              )}
+            </div>
+          </section>
         )}
         {content.groups && content.groups.length > 0 && (
           <div className="ef-idlg__groups">
@@ -207,9 +251,14 @@ export function InfoDialog({
   );
   // 站点入口弹窗带封面媒体块、RSS/友链弹窗带外链列表：卡片按内容加高（视口封顶），桌面端以 inline style
   // 覆盖固定高度；窄屏走 CSS 的内容自适应高度，不加 inline。揭示动画的行高在挂载时实测，随卡片高度自适应。
-  const cardHeight = content.image || content.links?.length || content.groups?.length
-    ? Math.min(780, Math.round((window.innerHeight - 48) / 0.72))
-    : 520;
+  const cardHeight =
+    content.image ||
+    content.links?.length ||
+    content.groups?.length ||
+    content.notice !== undefined ||
+    content.failures?.length
+      ? Math.min(780, Math.round((window.innerHeight - 48) / 0.72))
+      : 520;
   const panelHeight = Math.round(cardHeight * 0.72);
 
   useEffect(() => {

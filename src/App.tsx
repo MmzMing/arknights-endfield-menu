@@ -22,8 +22,10 @@ import { PlayerBadge } from "./components/player-badge";
 import { ProfilePanel } from "./components/profile-panel";
 import { CloseButton, Hud, NetInfo } from "./components/hud";
 import { InfoDialog } from "./components/info-dialog";
+import { MusicDialog } from "./components/music-dialog";
 import { useMenuPhase } from "./hooks/use-menu-phase";
-import { RSS_SNAPSHOT } from "./assets/rss-feed";
+import { useFeeds } from "./hooks/use-feeds";
+import { useMusicPlayer } from "./hooks/use-music-player";
 import { useStageScale } from "./hooks/use-stage-scale";
 
 /* App: assembles the menu exactly in the demo's mount order (app.js mountAll) and owns the two pieces of
@@ -42,8 +44,9 @@ function SceneBridge({ onScene }: { onScene: (api: SceneApi) => void }) {
 export default function App() {
   const content = MENU_CONTENT;
   const menu = useMenuPhase();
-  const feeds = RSS_SNAPSHOT;
   const [dialog, setDialog] = useState<string | null>(null);
+  const feeds = useFeeds(dialog === "rss");
+  const music = useMusicPlayer(dialog === "music");
   const [announcement, setAnnouncement] = useState<NewsSlide | null>(null);
   const [profileOpen, setProfileOpen] = useState(false);
   const closeDialog = useCallback(() => {
@@ -59,10 +62,10 @@ export default function App() {
   const dialogContent =
     announcement !== null
       ? announcementDialog(announcement)
-      : dialog === null
+      : dialog === null || dialog === "music"
         ? null
         : dialog === "rss"
-          ? feedDialog(feeds)
+          ? feedDialog(feeds.data, feeds.status, feeds.isLive, feeds.refresh)
           : dialog === "friends"
             ? friendsDialog()
             : dialogFor(dialog, content);
@@ -159,7 +162,7 @@ export default function App() {
               <NewsPanel slides={content.news.slides} paused={paused} onOpen={openAnnouncement} />
             </SceneLayer>
             <SceneLayer name="top">
-              <TopBar friendCount={FRIEND_LINKS.length} rssCount={feeds.items.length} />
+              <TopBar friendCount={FRIEND_LINKS.length} rssCount={feeds.data.items.length} />
             </SceneLayer>
             <SceneBridge onScene={onScene} />
           </SceneProvider>
@@ -175,10 +178,14 @@ export default function App() {
       {dialogContent && (
         <InfoDialog content={dialogContent} onClose={closeDialog} />
       )}
+      {dialog === "music" && (
+        <MusicDialog player={music} onClose={closeDialog} />
+      )}
       {profileOpen && (
         <ProfilePanel
           player={content.player}
           panel={content.profilePanel}
+          music={music}
           startDate={content.siteStartDate}
           onClose={closeProfile}
         />

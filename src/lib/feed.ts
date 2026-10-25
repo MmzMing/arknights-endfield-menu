@@ -1,4 +1,4 @@
-import type { FeedItem } from "../config/feeds";
+import type { FeedItem } from "../config/feeds.ts";
 
 export interface FeedEntryLike {
   title?: string;
