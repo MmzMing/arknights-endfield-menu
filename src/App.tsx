@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { MENU_CONTENT, announcementDialog, dialogFor, feedDialog, friendsDialog } from "./config/menu-content";
+import { MENU_CONTENT, announcementDialog, collectDialogText, dialogFor, feedDialog, friendsDialog } from "./config/menu-content";
 import { FRIEND_LINKS } from "./config/friend-links";
 import { SITE_LINKS } from "./config/link-config";
 import { TECH_STACK_COUNT, TECH_STACK_LABEL } from "./config/profile-panel-config";
@@ -23,7 +23,7 @@ import { PlayerBadge } from "./components/player-badge";
 import { ProfilePanel } from "./components/profile-panel";
 import { CloseButton, Hud, NetInfo } from "./components/hud";
 import { InfoDialog } from "./components/info-dialog";
-import { warmDialogImages, warmDialogSnapshot } from "./scene/dialog-pixel-renderer";
+import { warmDialogFonts, warmDialogImages, warmDialogSnapshot } from "./scene/dialog-pixel-renderer";
 import { LegalFooter } from "./components/legal-footer";
 import { MusicDialog } from "./components/music-dialog";
 import { useMenuPhase } from "./hooks/use-menu-phase";
@@ -101,6 +101,12 @@ export default function App() {
     const warm = () => {
       warmDialogImages(SITE_LINKS.map((link) => link.image));
       warmDialogSnapshot();
+      // 静态弹窗文案在配置里已知：空闲时把覆盖到的字体子集预取完，打开时快照不再等网络。
+      warmDialogFonts(
+        [...Object.values(content.dialogs), friendsDialog()].map((dialogContent) =>
+          collectDialogText(dialogContent),
+        ),
+      );
     };
     const run = () => {
       if (typeof window.requestIdleCallback !== "function") {
@@ -114,7 +120,7 @@ export default function App() {
       window.clearTimeout(timer);
       if (idle) window.cancelIdleCallback(idle);
     };
-  }, [menu.phase]);
+  }, [menu.phase, content]);
 
   const actions = useMemo(
     () => ({

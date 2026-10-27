@@ -331,3 +331,23 @@ export function dialogFor(action: string, content: MenuContent): DialogContent {
     dialog(action.toUpperCase(), action, "该功能尚在整备中。", [])
   );
 }
+
+/** 拼出弹窗全部可见文案，供快照字体子集预热按覆盖范围预取（见 scene/dialog-pixel-renderer.ts）。 */
+export function collectDialogText(content: DialogContent): string {
+  const parts: string[] = [content.title, content.subtitle, content.description];
+  for (const row of content.meta) parts.push(row.label, row.value);
+  if (content.links) {
+    for (const link of content.links) parts.push(link.source ?? "", link.title, link.note ?? "");
+  }
+  if (content.groups) {
+    for (const group of content.groups) {
+      parts.push(group.label);
+      for (const item of group.items) parts.push(item.name, item.level ?? "");
+    }
+  }
+  if (content.notice) parts.push(content.notice.text);
+  if (content.failures) {
+    for (const failure of content.failures) parts.push(failure.name, failure.reason);
+  }
+  return parts.join("\n");
+}

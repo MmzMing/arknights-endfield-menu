@@ -286,34 +286,39 @@ export function InfoDialog({
       };
     }
 
+    // 时间线从挂载即开始：遮罩与关闭按钮立刻响应，碎片相位按 400ms 推进（相位起点本就全透明，
+    // 画布无快照时看不出区别）；快照就绪后按当前进度接入，等待时间不叠加在动效之前。
+    const playhead = { progress: 0 };
+    const entrance = gsap.timeline({
+      onComplete: () => {
+        entranceTimelineRef.current = null;
+        showStatic();
+      },
+    });
+    entrance
+      .to(close, { opacity: 1, duration: 0.12, ease: "none" }, 0.08)
+      .to(playhead, {
+        progress: 1,
+        duration: PIXEL_TRANSITION_DURATION,
+        ease: "none",
+        onUpdate: () => {
+          pixelPhaseRef.current = 1 - playhead.progress;
+          renderer?.draw(pixelPhaseRef.current);
+        },
+      }, 0);
+    entranceTimelineRef.current = entrance;
+
     const prepare = async () => {
       try {
         const raster = await rasterizeDialog(shape);
-        if (disposed) return;
+        if (disposed || closingRef.current) return;
         renderer = createDialogPixelRenderer(canvas, raster);
-        // 入场必须等快照就绪后再开始；大封面首次取图可能超过 400ms，先跑时间线会让动效整段丢失。
-        renderer.draw(1);
-        gsap.set(shape, { opacity: 0 });
-        gsap.set(canvas, { opacity: 1 });
-        const playhead = { progress: 0 };
-        const entrance = gsap.timeline({
-          onComplete: () => {
-            entranceTimelineRef.current = null;
-            showStatic();
-          },
-        });
-        entrance
-          .to(close, { opacity: 1, duration: 0.12, ease: "none" }, 0.08)
-          .to(playhead, {
-            progress: 1,
-            duration: PIXEL_TRANSITION_DURATION,
-            ease: "none",
-            onUpdate: () => {
-              pixelPhaseRef.current = 1 - playhead.progress;
-              renderer?.draw(pixelPhaseRef.current);
-            },
-          }, 0);
-        entranceTimelineRef.current = entrance;
+        if (entranceTimelineRef.current && playhead.progress < 1) {
+          gsap.set(shape, { opacity: 0 });
+          gsap.set(canvas, { opacity: 1 });
+          renderer.draw(pixelPhaseRef.current);
+        }
+        // 入场已结束则保持静态面板；关闭时间线仍接管，退出时从相位 0 播完整消融。
         const closeDriver = { value: 0 };
         const closeTimeline = gsap.timeline({
           paused: true,

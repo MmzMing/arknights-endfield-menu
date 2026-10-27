@@ -447,10 +447,13 @@ function fontCoversText(face: FontFaceEntry, codePoints: ReadonlySet<number>): b
   return false;
 }
 
+function codePointsOf(text: string): Set<number> {
+  return new Set(Array.from(text, (char) => char.codePointAt(0) ?? 0));
+}
+
 async function getDialogCss(text: string): Promise<string> {
   const { base, faces } = await getCssIndex();
-  const codePoints = new Set(Array.from(text, (char) => char.codePointAt(0) ?? 0));
-  const selected = faces.filter((face) => fontCoversText(face, codePoints));
+  const selected = faces.filter((face) => fontCoversText(face, codePointsOf(text)));
   const urls = Array.from(new Set(selected.flatMap((face) => face.urls))).sort();
   const key = urls.join("|");
   let pending = dialogCssCache.get(key);
@@ -475,6 +478,24 @@ async function getDialogCss(text: string): Promise<string> {
 /** 菜单空闲时预热：解析样式表与字体族索引，弹窗打开时只取当前文字覆盖的子集。 */
 export function warmDialogSnapshot(): void {
   void getCssIndex();
+}
+
+/** 菜单空闲时预取静态弹窗文案覆盖的字体子集：打开时快照只剩字符串拼装与栅格化，不再等网络。 */
+export function warmDialogFonts(texts: string[]): void {
+  void (async () => {
+    const { faces } = await getCssIndex();
+    const codePoints = new Set<number>();
+    for (const text of texts) {
+      for (const codePoint of codePointsOf(text)) codePoints.add(codePoint);
+    }
+    const urls = new Set<string>();
+    for (const face of faces) {
+      if (fontCoversText(face, codePoints)) {
+        for (const url of face.urls) urls.add(url);
+      }
+    }
+    await Promise.all(Array.from(urls, (url) => getFontData(url)));
+  })();
 }
 
 export async function rasterizeDialog(sourceElement: HTMLElement): Promise<HTMLCanvasElement> {
