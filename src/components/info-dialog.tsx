@@ -3,6 +3,8 @@ import { gsap } from "gsap";
 import { createTopoContourPaths } from "../lib/topo-contours";
 import type { DialogContent } from "../config/menu-content";
 import { TechStackIcon } from "./tech-stack-icon";
+import { createDialogPixelRenderer, rasterizeDialog, type DialogPixelRenderer } from "../scene/dialog-pixel-renderer";
+import { PIXEL_TRANSITION_DURATION } from "../lib/pixel-transition";
 import "../styles/info-dialog.css";
 
 const CONTOUR_PATHS = createTopoContourPaths({
@@ -13,44 +15,12 @@ const CONTOUR_PATHS = createTopoContourPaths({
   seed: 20261024,
 });
 
-/* 上下揭示的时序资产（秒）。
-   卡片被水平切成 BAND_COUNT 行，每行是一份独立的面板副本，只有 clip-path 窗口内才画像素；
-   窗口从卡片垂直中心的一条横线展开成行高、同时向上下散开到各自行位，左右从固定条长补满整行。
-   所有行在 BAND_LAND 同时到位（外侧先出发、行程最长），中位行随即解除裁切接管静态显示，
-   最外两条再向上下边缘压缩成线条后被吸收。 */
-const BAND_COUNT = 5;
-const BAR_WIDTH_RATIO = 0.4;
-const BAR_OFFSETS = [1, 0, 0.5, 1, 0];
-const LINE_THICKNESS = 2;
-const LINE_IN = 0.06;
-const BAND_STAGGER = 0.04;
-const BAND_LAND = 0.4;
-const WIDEN_FROM = 0.55;
-const ABSORB = 0.08;
-const SETTLE = 0.06;
-const CLOSE_ABSORB = 0.06;
-const CLOSE_START = 0.1;
-const CLOSE_DUR = 0.16;
-const CLOSE_STAGGER = 0.02;
-
-const clamp01 = (v: number) => (v < 0 ? 0 : v > 1 ? 1 : v);
-
-/** 每帧只在值变化时写 CSS 变量。 */
-function makeWriter(el: HTMLElement) {
-  const last = new Map<string, string>();
-  return (name: string, value: string) => {
-    if (last.get(name) === value) return;
-    last.set(name, value);
-    el.style.setProperty(name, value);
-  };
-}
-
-function DialogFace({ content, isStatic }: { content: DialogContent; isStatic: boolean }) {
-  // 每个揭示条带各有一份 SVG，pattern/mask 必须用独立 id，避免整页第一个（可能已隐藏的）副本被引用。
+function DialogFace({ content }: { content: DialogContent }) {
+  // pattern 必须用独立 id，避免整页其他副本引用到同一份。
   const wordUid = useId().replace(/[^a-zA-Z0-9_-]/g, "");
   const wordLineId = `ef-idlg-wordline-${wordUid}`;
   return (
-    <div className="ef-idlg__surface" aria-hidden={isStatic ? undefined : "true"}>
+    <div className="ef-idlg__surface">
       <div className="ef-idlg__toplines" aria-hidden="true" />
       <div className="ef-idlg__topword" aria-hidden="true">
         <svg viewBox="0 0 1032 160" preserveAspectRatio="none">
@@ -237,20 +207,17 @@ export function InfoDialog({
   onClose: () => void;
 }) {
   const rootRef = useRef<HTMLDivElement>(null);
-  const cardRef = useRef<HTMLDivElement>(null);
-  const bandRefs = useRef<(HTMLDivElement | null)[]>([]);
+  const shapeRef = useRef<HTMLDivElement>(null);
+  const canvasRef = useRef<HTMLCanvasElement>(null);
   const closeRef = useRef<HTMLButtonElement>(null);
   const closingRef = useRef(false);
   const closeTimelineRef = useRef<gsap.core.Timeline | null>(null);
   const entranceTimelineRef = useRef<gsap.core.Timeline | null>(null);
   const onCloseRef = useRef(onClose);
   const reducedMotionRef = useRef<MediaQueryList | null>(null);
-  // 窄屏的卡片是内容撑高的可滚动面板，切成多行会各自变成滚动容器，退化为单条整卡揭示。
-  const [bandCount] = useState(() =>
-    window.matchMedia("(max-width: 720px)").matches ? 1 : BAND_COUNT,
-  );
+  const [isNarrow] = useState(() => window.matchMedia("(max-width: 720px)").matches);
   // 站点入口弹窗带封面媒体块、RSS/友链弹窗带外链列表：卡片按内容加高（视口封顶），桌面端以 inline style
-  // 覆盖固定高度；窄屏走 CSS 的内容自适应高度，不加 inline。揭示动画的行高在挂载时实测，随卡片高度自适应。
+  // 覆盖固定高度；窄屏走 CSS 的内容自适应高度，不加 inline。
   const cardHeight =
     content.image ||
     content.links?.length ||
@@ -282,173 +249,104 @@ export function InfoDialog({
 
   useLayoutEffect(() => {
     const root = rootRef.current;
-    const card = cardRef.current;
-    const bands = bandRefs.current.slice(0, bandCount);
-    if (!root || !card || bands.length !== bandCount || bands.some((b) => !b)) return;
-    const dim = root.querySelector<HTMLElement>(".ef-idlg__dim");
-    if (!dim) return;
+    const shape = shapeRef.current;
+    const canvas = canvasRef.current;
+    const close = closeRef.current;
+    const dim = root?.querySelector<HTMLElement>(".ef-idlg__dim");
+    if (!root || !shape || !canvas || !close || !dim) return;
 
     const previousFocus = document.activeElement instanceof HTMLElement ? document.activeElement : null;
     const motion = window.matchMedia("(prefers-reduced-motion: reduce)");
     reducedMotionRef.current = motion;
     root.dataset.phase = "entering";
-    closeRef.current?.focus({ preventScroll: true });
+    close.focus({ preventScroll: true });
+    let disposed = false;
+    let renderer: DialogPixelRenderer | null = null;
 
-    // 条带与面板同框，窗口坐标一律以条带自身的布局盒为准（不受卡片 scale 影响）。
-    const box = bands[0] as HTMLElement;
-    const width = box.offsetWidth;
-    const height = box.offsetHeight;
-    const rowHeight = height / bandCount;
-    const barWidth = Math.round(width * BAR_WIDTH_RATIO);
-    const offsets = bandCount === 1 ? [0.5] : BAR_OFFSETS;
-    const centerY = height / 2;
-    const middle = (bandCount - 1) / 2;
-    const hasAbsorb = bandCount > 1;
+    const showStatic = () => {
+      gsap.set([shape, close, dim], { opacity: 1 });
+      gsap.set(canvas, { opacity: 0 });
+      root.style.setProperty("--ef-idlg-shadow", "1");
+      root.dataset.phase = "open";
+    };
 
-    const writers = bands.map((el) => makeWriter(el as HTMLElement));
-    const writeRoot = makeWriter(root);
+    gsap.set(dim, { opacity: 0 });
+    gsap.set(close, { opacity: 0 });
+    if (motion.matches) {
+      showStatic();
+      return () => {
+        if (previousFocus?.isConnected) previousFocus.focus({ preventScroll: true });
+      };
+    }
 
-    type BandState = { s: number; a: number; full: boolean; hidden: boolean };
-    const states: BandState[] = bands.map(() => ({ s: 0, a: 0, full: false, hidden: false }));
-    const shadow = { v: 0 };
+    // 时间线从挂载即开始：快照稍后就绪时按当前进度接入，等待时间不再叠加在 400ms 之外。
+    const playhead = { progress: 0 };
+    const entrance = gsap.timeline({
+      onComplete: () => {
+        entranceTimelineRef.current = null;
+        showStatic();
+      },
+    });
+    entrance
+      .to(dim, { opacity: 1, duration: 0.12, ease: "none" }, 0)
+      .to(close, { opacity: 1, duration: 0.12, ease: "none" }, 0.08)
+      .to(playhead, {
+        progress: 1,
+        duration: PIXEL_TRANSITION_DURATION,
+        ease: "none",
+        onUpdate: () => renderer?.draw(1 - playhead.progress),
+      }, 0);
+    entranceTimelineRef.current = entrance;
 
-    const render = () => {
-      writeRoot("--ef-idlg-shadow", shadow.v.toFixed(3));
-      bands.forEach((_, k) => {
-        const write = writers[k];
-        const st = states[k];
-        write("visibility", st.hidden ? "hidden" : "visible");
-        if (st.full) {
-          write("--ef-band-t", "0px");
-          write("--ef-band-r", "0px");
-          write("--ef-band-b", "0px");
-          write("--ef-band-l", "0px");
-          write("--ef-band-sheen", "0");
-          write("--ef-band-absorb", "0");
+    const prepare = async () => {
+      try {
+        const raster = await rasterizeDialog(shape);
+        if (disposed) return;
+        renderer = createDialogPixelRenderer(canvas, raster);
+        if (closingRef.current || playhead.progress >= 1) {
+          renderer.destroy();
+          renderer = null;
           return;
         }
-        const homeTop = k * rowHeight;
-        const homeBottom = (k + 1) * rowHeight;
-        const lineTop = centerY - LINE_THICKNESS / 2;
-        const lineBottom = centerY + LINE_THICKNESS / 2;
-        let top = lineTop + (homeTop - lineTop) * st.s;
-        let bottom = lineBottom + (homeBottom - lineBottom) * st.s;
-        if (st.a > 0) {
-          if (k === 0) bottom = homeBottom + (LINE_THICKNESS - homeBottom) * st.a;
-          else if (k === bandCount - 1) top = homeTop + (height - LINE_THICKNESS - homeTop) * st.a;
-        }
-        const widen = clamp01((st.s - WIDEN_FROM) / (1 - WIDEN_FROM));
-        const offsetX = Math.round((width - barWidth) * offsets[k]);
-        const left = offsetX * (1 - widen);
-        const right = (width - offsetX - barWidth) * (1 - widen);
-        write("--ef-band-t", `${top.toFixed(2)}px`);
-        write("--ef-band-r", `${right.toFixed(2)}px`);
-        write("--ef-band-b", `${(height - bottom).toFixed(2)}px`);
-        write("--ef-band-l", `${left.toFixed(2)}px`);
-        write("--ef-band-sheen", (1 - st.s).toFixed(3));
-        write("--ef-band-absorb", st.a.toFixed(3));
-      });
-    };
-
-    const handoff = (on: boolean) => {
-      states.forEach((st, k) => {
-        st.full = on && k === middle;
-        st.hidden = on && k !== middle && !(hasAbsorb && (k === 0 || k === bandCount - 1));
-        if (on && hasAbsorb && (k === 0 || k === bandCount - 1)) st.a = 0;
-      });
-      render();
-    };
-
-    const delayFor = (k: number) => LINE_IN + (middle - Math.abs(k - middle)) * BAND_STAGGER;
-    const closeOrder = states
-      .map((st, k) => ({ st, dist: Math.abs(k - middle) }))
-      .sort((a, b) => a.dist - b.dist)
-      .map((entry) => entry.st);
-
-    const context = gsap.context(() => {
-      gsap.set(dim, { opacity: 0 });
-      gsap.set(closeRef.current, { opacity: 0 });
-      render();
-
-      const closeTimeline = gsap.timeline({
-        paused: true,
-        onComplete: () => onCloseRef.current(),
-      });
-      closeTimeline
-        .add(() => {
-          handoff(false);
-          if (hasAbsorb) {
-            states[0].a = 1;
-            states[bandCount - 1].a = 1;
-            render();
-          }
-        }, 0)
-        .to(closeRef.current, { opacity: 0, duration: 0.04 }, 0)
-        .to(shadow, { v: 0, duration: CLOSE_ABSORB, ease: "none", onUpdate: render }, 0)
-        .to(
-          states.filter((_, k) => hasAbsorb && (k === 0 || k === bandCount - 1)),
-          { a: 0, duration: CLOSE_ABSORB, ease: "power2.out", onUpdate: render },
-          0,
-        )
-        .to(
-          closeOrder,
-          {
-            s: 0,
-            duration: CLOSE_DUR,
-            ease: "power2.in",
-            stagger: CLOSE_STAGGER,
-            onUpdate: render,
-          },
-          CLOSE_START,
-        )
-        .to(dim, { opacity: 0, duration: 0.1, ease: "none" }, CLOSE_START + CLOSE_DUR + 0.04);
-      closeTimelineRef.current = closeTimeline;
-
-      if (motion.matches) {
-        gsap.set(dim, { opacity: 1 });
-        shadow.v = 1;
-        states.forEach((st, k) => {
-          st.s = 1;
-          st.full = k === middle;
-          st.hidden = k !== middle;
+        renderer.draw(1 - playhead.progress);
+        gsap.set(shape, { opacity: 0 });
+        gsap.set(canvas, { opacity: 1 });
+        const closePlayhead = { progress: 0 };
+        const closeTimeline = gsap.timeline({
+          paused: true,
+          onComplete: () => onCloseRef.current(),
         });
-        render();
-        gsap.set(closeRef.current, { opacity: 1 });
-        root.dataset.phase = "open";
-        return;
+        closeTimeline
+          .set(shape, { opacity: 0 }, 0)
+          .set(canvas, { opacity: 1 }, 0)
+          .to(close, { opacity: 0, duration: 0.08, ease: "none" }, 0)
+          .to(closePlayhead, {
+            progress: 1,
+            duration: PIXEL_TRANSITION_DURATION,
+            ease: "none",
+            onUpdate: () => renderer?.draw(closePlayhead.progress),
+          }, 0)
+          .to(dim, { opacity: 0, duration: 0.12, ease: "none" }, PIXEL_TRANSITION_DURATION - 0.12);
+        closeTimelineRef.current = closeTimeline;
+      } catch (error) {
+        if (disposed) return;
+        console.warn("InfoDialog pixel transition unavailable", error);
+        showStatic();
+        closeTimelineRef.current = null;
       }
-
-      const entrance = gsap
-        .timeline({ onComplete: () => { root.dataset.phase = "open"; } })
-        .to(dim, { opacity: 1, duration: LINE_IN, ease: "none" }, 0);
-      states.forEach((st, k) => {
-        entrance.to(
-          st,
-          { s: 1, duration: BAND_LAND - delayFor(k), ease: "power2.out", onUpdate: render },
-          delayFor(k),
-        );
-      });
-      entrance.add(() => handoff(true), BAND_LAND);
-      if (hasAbsorb) {
-        entrance.to([states[0], states[bandCount - 1]], { a: 1, duration: ABSORB, ease: "power2.in", onUpdate: render }, BAND_LAND);
-      }
-      entrance
-        .to(shadow, { v: 1, duration: SETTLE, ease: "none", onUpdate: render }, BAND_LAND + 0.02)
-        .to(closeRef.current, { opacity: 1, duration: 0.04 }, BAND_LAND + 0.02)
-        .add(() => {
-          states.forEach((st) => {
-            st.hidden = st.full !== true;
-          });
-          render();
-        }, BAND_LAND + ABSORB);
-      entranceTimelineRef.current = entrance;
-    }, root);
+    };
+    void prepare();
 
     return () => {
-      context.revert();
+      disposed = true;
+      entranceTimelineRef.current?.kill();
+      closeTimelineRef.current?.kill();
+      entranceTimelineRef.current = null;
+      closeTimelineRef.current = null;
+      renderer?.destroy();
       if (previousFocus?.isConnected) previousFocus.focus({ preventScroll: true });
     };
-  }, [bandCount]);
+  }, []);
 
   useEffect(() => {
     const onKey = (event: KeyboardEvent) => {
@@ -471,24 +369,12 @@ export function InfoDialog({
         </defs>
       </svg>
       <div className="ef-idlg__frame">
-        <div
-          className="ef-idlg__panel"
-          style={bandCount === 1 ? undefined : { height: panelHeight }}
-        >
-          <div className="ef-idlg__card" ref={cardRef} style={bandCount === 1 ? undefined : { height: cardHeight }}>
-            <div className="ef-idlg__shape">
+        <div className="ef-idlg__panel" style={isNarrow ? undefined : { height: panelHeight }}>
+          <div className="ef-idlg__card" style={isNarrow ? undefined : { height: cardHeight }}>
+            <canvas className="ef-idlg__pixels" ref={canvasRef} aria-hidden="true" />
+            <div className="ef-idlg__shape" ref={shapeRef}>
               <div className="ef-idlg__rim" aria-hidden="true" />
-              {Array.from({ length: bandCount }, (_, k) => (
-                <div
-                  className="ef-idlg__band"
-                  key={k}
-                  ref={(el) => {
-                    bandRefs.current[k] = el;
-                  }}
-                >
-                  <DialogFace content={content} isStatic={k === (bandCount - 1) / 2} />
-                </div>
-              ))}
+              <DialogFace content={content} />
             </div>
             <button className="ef-idlg__close" ref={closeRef} title="关闭" aria-label="关闭" onClick={requestClose}>
               <svg viewBox="0 0 24 24" aria-hidden="true">

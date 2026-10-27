@@ -1,11 +1,3 @@
-/* 上下揭示的每帧变量：条带窗口（clip-path inset 四边）与两层覆盖色。
-   窗口变量只作用于条带自身；覆盖变量需要透传给伪元素，故 inherits: true。 */
-@property --ef-band-t { syntax: "<length-percentage>"; inherits: false; initial-value: 50%; }
-@property --ef-band-r { syntax: "<length-percentage>"; inherits: false; initial-value: 50%; }
-@property --ef-band-b { syntax: "<length-percentage>"; inherits: false; initial-value: 50%; }
-@property --ef-band-l { syntax: "<length-percentage>"; inherits: false; initial-value: 50%; }
-@property --ef-band-sheen { syntax: "<number>"; inherits: true; initial-value: 0; }
-@property --ef-band-absorb { syntax: "<number>"; inherits: true; initial-value: 0; }
 @property --ef-idlg-shadow { syntax: "<number>"; inherits: true; initial-value: 0; }
 
 .ef-idlg { position: fixed; inset: 0; z-index: 50; font-family: var(--ef-font-cn); }
@@ -30,31 +22,18 @@
   transform: scale(0.72); transform-origin: top left;
   filter: drop-shadow(0 30px 54px rgb(0 0 0 / calc(0.54 * var(--ef-idlg-shadow))));
 }
-/* 揭示期间形状层保持透明：未落位的区域要透出模糊背景，而不是黑色底板。 */
 .ef-idlg__shape {
   position: relative; width: 100%; height: 100%; padding: 4px; overflow: hidden;
   clip-path: polygon(0 62px, 62px 0, calc(100% - 172px) 0, calc(100% - 151px) 17px, 100% 17px,
     100% 100%, 69px 100%, 0 calc(100% - 69px));
 }
+.ef-idlg[data-phase="entering"] .ef-idlg__shape { opacity: 0; }
+.ef-idlg__pixels {
+  position: absolute; inset: 0; z-index: 20; display: block; width: 100%; height: 100%;
+  opacity: 0; pointer-events: none;
+}
 .ef-idlg__rim {
   position: absolute; inset: 0; background: #0b0c0a; opacity: var(--ef-idlg-shadow);
-}
-.ef-idlg__band {
-  position: absolute; inset: 4px;
-  clip-path: inset(var(--ef-band-t) var(--ef-band-r) var(--ef-band-b) var(--ef-band-l));
-  will-change: clip-path;
-}
-.ef-idlg__band::before, .ef-idlg__band::after {
-  content: ""; position: absolute; inset: 0; pointer-events: none;
-}
-/* 飞行中的高光洗白，落位时归零。 */
-.ef-idlg__band::before {
-  z-index: 40; opacity: calc(var(--ef-band-sheen) * 0.5);
-  background: linear-gradient(100deg, rgba(255,255,255,0.86), rgba(241,240,233,0.2) 46%, rgba(255,240,91,0.34));
-}
-/* 最外两条被上下边缘吸收时的实心条，对应参考图里压向边缘的灰色长条。 */
-.ef-idlg__band::after {
-  z-index: 41; opacity: calc(var(--ef-band-absorb) * 0.92); background: #6f736c;
 }
 .ef-idlg__surface {
   position: relative; width: 100%; height: 100%; overflow: hidden; color: #11130e;

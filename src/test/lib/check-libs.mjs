@@ -70,4 +70,59 @@ function check(name, fn) {
   });
 }
 
+// ---- pixel transition: Kimi K3.1 Pro's measured phase envelope and stable dissolve ----
+{
+  const pixel = await import("../../lib/pixel-transition.ts").catch(() => null);
+  check("pixel transition module is available", () => {
+    assert.ok(pixel, "src/lib/pixel-transition.ts must export the measured transition functions");
+  });
+  if (pixel) {
+    const { PIXEL_TRANSITION_BEATS, PIXEL_TRANSITION_DURATION, fragmentOpacity, pixelHash, transitionState } = pixel;
+    check("pixel transition is compressed to 400ms while keeping the reference beat cadence", () => {
+      assert.equal(PIXEL_TRANSITION_DURATION, .4);
+      assert.equal(PIXEL_TRANSITION_BEATS, Math.round(36 * PIXEL_TRANSITION_DURATION / .8));
+    });
+    const clamp = (value) => Math.max(0, Math.min(1, value));
+    const smooth = (from, to, value) => {
+      const t = clamp((value - from) / (to - from));
+      return t * t * (3 - 2 * t);
+    };
+    const referenceState = (progress) => {
+      const phase = clamp(progress);
+      const envelope = smooth(0, .12, phase) * (.42 + .58 * smooth(.08, .5, phase)) * (1 - smooth(.72, 1, phase));
+      const pulse = .72 + .28 * Math.sin(phase * Math.PI * 7.5 + Math.sin(9 * phase)) ** 2;
+      return {
+        phase,
+        strength: phase > 0 && phase < 1 ? envelope * pulse : 0,
+        reveal: smooth(.28, 1, phase),
+      };
+    };
+    check("pixel transition matches the reference phase envelope", () => {
+      for (const progress of [-1, 0, .04, .12, .28, .5, .72, .97, 1, 2]) {
+        assert.deepEqual(transitionState(progress), referenceState(progress), `progress ${progress}`);
+      }
+    });
+    check("pixel dissolve uses the reference stable threshold", () => {
+      for (const [progress, threshold] of [[0, .12], [.4, .5], [.7, .5], [.97, .94], [1, .12]]) {
+        const opening = smooth(.4, .97, clamp(progress));
+        const expected = 1 - smooth(threshold - .1, threshold + .1, opening);
+        assert.equal(fragmentOpacity(progress, threshold), expected, `progress ${progress}, threshold ${threshold}`);
+      }
+    });
+    check("pixel hash is deterministic across the phase domain", () => {
+      const referenceHash = (x, y) => {
+        let px = (x * 123.34) % 1;
+        let py = (y * 456.21) % 1;
+        const dot = px * (px + 45.32) + py * (py + 45.32);
+        px += dot;
+        py += dot;
+        return (px * py) % 1;
+      };
+      for (const [x, y] of [[0, 0], [1, 19], [7, 73], [31, 83], [180, 90]]) {
+        assert.equal(pixelHash(x, y), referenceHash(x, y), `hash ${x},${y}`);
+      }
+    });
+  }
+}
+
 console.log(`\n${passed} checks passed`);

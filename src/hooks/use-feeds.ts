@@ -111,7 +111,8 @@ function mergeBatches(outcomes: readonly (FeedSnapshot | null)[]): FeedSnapshot 
   return { generatedAt, sites, total: FEED_SOURCES.length, items, failures };
 }
 
-export function useFeeds(active: boolean): FeedView {
+/** active: 弹窗需要实时数据时强制刷新；enabled: 菜单入场结束后才开始首批加载，避免批量状态更新撞上圆盘入场。 */
+export function useFeeds(active: boolean, enabled = true): FeedView {
   const [data, setData] = useState<FeedSnapshot>(() => mergeBatches(storeOutcomes()) ?? RSS_SNAPSHOT);
   const [isLive, setIsLive] = useState(() => storeOutcomes().some((outcome) => outcome !== null));
   const [status, setStatus] = useState<FeedStatus>(() =>
@@ -190,14 +191,14 @@ export function useFeeds(active: boolean): FeedView {
   }, []);
 
   useEffect(() => {
-    // 抓取是外部系统同步；首次加载需要立即进入 loading 状态。
+    // 抓取是外部系统同步；首批加载等菜单入场结束，入场动画期间不更新 React 状态。
     // oxlint-disable-next-line react/set-state-in-effect
-    void load(false);
+    if (enabled) void load(false);
     return () => {
       inflight.current?.abort();
       inflight.current = null;
     };
-  }, [load]);
+  }, [enabled, load]);
 
   useEffect(() => {
     // oxlint-disable-next-line react/set-state-in-effect

@@ -22,6 +22,7 @@ import { PlayerBadge } from "./components/player-badge";
 import { ProfilePanel } from "./components/profile-panel";
 import { CloseButton, Hud, NetInfo } from "./components/hud";
 import { InfoDialog } from "./components/info-dialog";
+import { warmDialogSnapshot } from "./scene/dialog-pixel-renderer";
 import { LegalFooter } from "./components/legal-footer";
 import { MusicDialog } from "./components/music-dialog";
 import { useMenuPhase } from "./hooks/use-menu-phase";
@@ -46,7 +47,7 @@ export default function App() {
   const content = MENU_CONTENT;
   const menu = useMenuPhase();
   const [dialog, setDialog] = useState<string | null>(null);
-  const feeds = useFeeds(dialog === "rss");
+  const feeds = useFeeds(dialog === "rss", menu.phase === "open");
   const music = useMusicPlayer(dialog === "music");
   const [announcement, setAnnouncement] = useState<NewsSlide | null>(null);
   const [profileOpen, setProfileOpen] = useState(false);
@@ -89,6 +90,26 @@ export default function App() {
     if (paused) scene.pause();
     else scene.resume();
   }, [paused]);
+
+  // the dialog transition needs an embedded-font stylesheet snapshot. Build it only after the entrance has
+  // settled and the menu is idle, so the one-off ~60ms task never lands inside the entrance animation.
+  useEffect(() => {
+    if (menu.phase !== "open") return;
+    let timer = 0;
+    let idle = 0;
+    const run = () => {
+      if (typeof window.requestIdleCallback !== "function") {
+        warmDialogSnapshot();
+        return;
+      }
+      idle = window.requestIdleCallback(() => warmDialogSnapshot(), { timeout: 2000 });
+    };
+    timer = window.setTimeout(run, 500);
+    return () => {
+      window.clearTimeout(timer);
+      if (idle) window.cancelIdleCallback(idle);
+    };
+  }, [menu.phase]);
 
   const actions = useMemo(
     () => ({
