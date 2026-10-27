@@ -339,11 +339,9 @@ function cacheImage(url: string): Promise<string | null> {
   return pending;
 }
 
-/** 菜单空闲时预取弹窗封面，避免首次打开时等待大图下载与转码。 */
-export function warmDialogImages(urls: string[]): void {
-  urls.forEach((url) => {
-    void cacheImage(url);
-  });
+/** 菜单空闲 / 首次启动时预取封面：取图 + webp 重编码都提前跑完。 */
+export function warmDialogImages(urls: string[]): Promise<void> {
+  return Promise.all(urls.map((url) => cacheImage(url))).then(() => undefined);
 }
 
 const CSS_URL = /url\((["']?)([^"')]+)\1\)/g;
@@ -451,6 +449,47 @@ function codePointsOf(text: string): Set<number> {
   return new Set(Array.from(text, (char) => char.codePointAt(0) ?? 0));
 }
 
+const SNAPSHOT_TEXT_MARGIN = 64;
+
+/** 元素是否被某个裁剪祖先（overflow 非 visible）整块裁到可视区外；留 SNAPSHOT_TEXT_MARGIN 余量。 */
+function clippedOutside(rect: DOMRect, element: HTMLElement, source: HTMLElement): boolean {
+  const outside = (clip: DOMRect) =>
+    rect.bottom < clip.top - SNAPSHOT_TEXT_MARGIN ||
+    rect.top > clip.bottom + SNAPSHOT_TEXT_MARGIN ||
+    rect.right < clip.left - SNAPSHOT_TEXT_MARGIN ||
+    rect.left > clip.right + SNAPSHOT_TEXT_MARGIN;
+  let node: HTMLElement | null = element.parentElement;
+  while (node) {
+    const style = window.getComputedStyle(node);
+    if (style.overflowX !== "visible" || style.overflowY !== "visible") {
+      if (outside(node.getBoundingClientRect())) return true;
+    }
+    if (node === source) break;
+    node = node.parentElement;
+  }
+  return outside(source.getBoundingClientRect());
+}
+
+/** 快照只画可见区域：字体子集按“会被画出来的文字”挑选。长列表弹窗（订阅）整列表文字有八千字，
+    按全量挑子集会让内嵌字体涨到 3MB、SVG 解码 220ms 以上，入场动效因此永远来不及接入。
+    滚动容器外的行不参与挑选（它们在快照里被裁掉），行高由 nowrap + 固定 padding 决定，换字体不改布局。 */
+function visibleTextOf(source: HTMLElement): string {
+  const parts: string[] = [];
+  const walker = document.createTreeWalker(source, NodeFilter.SHOW_ELEMENT);
+  let node: Node | null = walker.currentNode;
+  while (node !== null) {
+    const element = node as HTMLElement;
+    if (element.firstElementChild === null) {
+      const text = element.textContent ?? "";
+      if (text.trim().length > 0 && !clippedOutside(element.getBoundingClientRect(), element, source)) {
+        parts.push(text);
+      }
+    }
+    node = walker.nextNode();
+  }
+  return parts.join("\n");
+}
+
 async function getDialogCss(text: string): Promise<string> {
   const { base, faces } = await getCssIndex();
   const selected = faces.filter((face) => fontCoversText(face, codePointsOf(text)));
@@ -475,19 +514,23 @@ async function getDialogCss(text: string): Promise<string> {
   return pending;
 }
 
-/** 菜单空闲时预热：解析样式表与字体族索引，弹窗打开时只取当前文字覆盖的子集。 */
-export function warmDialogSnapshot(): void {
-  void getCssIndex();
+/** 解析样式表与字体族索引，弹窗打开时只取当前文字覆盖的子集。 */
+export function warmDialogSnapshot(): Promise<void> {
+  return getCssIndex().then(() => undefined);
 }
 
-/** 菜单空闲时预取静态弹窗文案覆盖的字体子集：打开时快照只剩字符串拼装与栅格化，不再等网络。 */
-export function warmDialogFonts(texts: string[]): void {
-  void (async () => {
+/** 预取文案覆盖的字体子集（转 base64 供快照 SVG 内嵌），并让文档字面量提前加载对应字重，
+    打开弹窗时 rasterizeDialog 里的 fonts.ready 不再等网络。 */
+export function warmDialogFonts(texts: string[]): Promise<void> {
+  const text = texts.join("");
+  return (async () => {
+    await Promise.all(
+      Array.from(DIALOG_FONT_FAMILIES, (family) =>
+        document.fonts.load(`16px "${family}"`, text).catch(() => []),
+      ),
+    );
     const { faces } = await getCssIndex();
-    const codePoints = new Set<number>();
-    for (const text of texts) {
-      for (const codePoint of codePointsOf(text)) codePoints.add(codePoint);
-    }
+    const codePoints = codePointsOf(text);
     const urls = new Set<string>();
     for (const face of faces) {
       if (fontCoversText(face, codePoints)) {
@@ -496,6 +539,27 @@ export function warmDialogFonts(texts: string[]): void {
     }
     await Promise.all(Array.from(urls, (url) => getFontData(url)));
   })();
+}
+
+/** 预热 WebGL 管线：一次性上下文里编译同一套着色器并跑一帧，摊掉首次打开时的同步编译与上下文初始化。 */
+export function warmDialogRenderer(): Promise<void> {
+  return Promise.resolve().then(() => {
+    const source = document.createElement("canvas");
+    source.width = 16;
+    source.height = 16;
+    const context = source.getContext("2d");
+    if (!context) return;
+    context.fillStyle = "#e7e7e2";
+    context.fillRect(0, 0, 16, 16);
+    const canvas = document.createElement("canvas");
+    try {
+      const renderer = createDialogPixelRenderer(canvas, source);
+      renderer.draw(0.5);
+      renderer.destroy();
+    } catch {
+      // 无 WebGL2 的环境打开弹窗时本就走静态面板，预热失败无需处理。
+    }
+  });
 }
 
 export async function rasterizeDialog(sourceElement: HTMLElement): Promise<HTMLCanvasElement> {
@@ -518,7 +582,7 @@ export async function rasterizeDialog(sourceElement: HTMLElement): Promise<HTMLC
     if (dataUrl && cloned) cloned.src = dataUrl;
   }));
   clone.querySelectorAll("canvas").forEach((canvas) => canvas.remove());
-  const css = await getDialogCss(sourceElement.textContent ?? "");
+  const css = await getDialogCss(visibleTextOf(sourceElement));
   const serialized = new XMLSerializer().serializeToString(clone);
   const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="${viewportWidth}" height="${viewportHeight}"><foreignObject width="100%" height="100%"><style><![CDATA[${css}]]></style><div xmlns="http://www.w3.org/1999/xhtml" style="position:absolute;left:0;top:0;width:${width}px;height:${height}px">${serialized}</div></foreignObject></svg>`;
   const image = new Image();

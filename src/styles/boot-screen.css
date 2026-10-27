@@ -1,0 +1,167 @@
+/* 全屏预设加载页（新 UI）：大字号百分比读数 + 完成后四象限各自朝本角滑出。
+   这里的动画节奏属于该界面自身，不是 demo 迁移的测量资产。 */
+
+.ef-boot {
+  --ef-boot-paper: #eceae5;
+  --ef-boot-ink: #1a1c1e;
+  --ef-boot-soft: rgba(26, 28, 30, 0.56);
+  --ef-boot-faint: rgba(26, 28, 30, 0.3);
+  --ef-boot-slide: 0.66s;
+  position: fixed;
+  inset: 0;
+  z-index: 200;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  color: var(--ef-boot-ink);
+  font-family: var(--ef-font-cn);
+  animation: efBootIn 0.2s ease both;
+}
+
+/* 四块纸面底色完全一致：静止时看不出切分，只有滑开的那一刻才显出四块。 */
+.ef-boot__quads {
+  position: absolute;
+  inset: 0;
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  grid-template-rows: 1fr 1fr;
+}
+
+.ef-boot__quads i {
+  display: block;
+  background: var(--ef-boot-paper);
+}
+
+.ef-boot__quads i:nth-child(1) { --qx: -102%; --qy: -102%; }
+.ef-boot__quads i:nth-child(2) { --qx: 102%; --qy: -102%; }
+.ef-boot__quads i:nth-child(3) { --qx: -102%; --qy: 102%; }
+.ef-boot__quads i:nth-child(4) { --qx: 102%; --qy: 102%; }
+
+.ef-boot__readout {
+  position: relative;
+  z-index: 1;
+  display: flex;
+  align-items: flex-start;
+  justify-content: center;
+  gap: clamp(6px, 1vw, 14px);
+  font-family: var(--ef-font-en);
+  line-height: 0.86;
+  animation: efBootRise 0.5s cubic-bezier(0.16, 0.84, 0.24, 1) both;
+}
+
+.ef-boot__readout b {
+  font-size: clamp(96px, 19vw, 268px);
+  font-weight: 700;
+  letter-spacing: -0.02em;
+  font-variant-numeric: tabular-nums;
+  color: var(--ef-boot-ink);
+}
+
+.ef-boot__readout span {
+  font-size: clamp(20px, 3.2vw, 46px);
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  color: var(--ef-boot-soft);
+}
+
+.ef-boot__meta {
+  position: relative;
+  z-index: 1;
+  margin-top: clamp(18px, 3.4vh, 40px);
+  display: grid;
+  justify-items: center;
+  gap: 6px;
+  animation: efBootRise 0.5s 0.1s cubic-bezier(0.16, 0.84, 0.24, 1) both;
+}
+
+.ef-boot__label {
+  font-family: var(--ef-font-mono);
+  font-size: clamp(9px, 0.92vw, 13px);
+  letter-spacing: 0.34em;
+  text-indent: 0.34em;
+  color: var(--ef-boot-soft);
+}
+
+.ef-boot__id {
+  font-family: var(--ef-font-mono);
+  font-size: clamp(8px, 0.74vw, 11px);
+  letter-spacing: 0.26em;
+  text-indent: 0.26em;
+  color: var(--ef-boot-faint);
+}
+
+/* 细横线兼进度：与百分比同源，读数跳变时靠 transition 抹平。 */
+.ef-boot__rule {
+  position: relative;
+  z-index: 1;
+  margin-top: clamp(20px, 3.6vh, 44px);
+  width: min(520px, 58vw);
+  height: 1px;
+  background: rgba(26, 28, 30, 0.18);
+  animation: efBootRise 0.5s 0.18s cubic-bezier(0.16, 0.84, 0.24, 1) both;
+}
+
+.ef-boot__rule i {
+  position: absolute;
+  left: 0;
+  top: 0;
+  height: 1px;
+  width: calc(var(--ef-boot-progress, 0) * 100%);
+  background: var(--ef-boot-ink);
+  transition: width 0.18s linear;
+}
+
+/* ---- 退场：读数先隐，四象限各自朝本角滑出 ---- */
+
+.ef-boot[data-exiting="true"] .ef-boot__readout,
+.ef-boot[data-exiting="true"] .ef-boot__meta,
+.ef-boot[data-exiting="true"] .ef-boot__rule {
+  animation: efBootFadeOut 0.22s ease forwards;
+}
+
+.ef-boot[data-exiting="true"] .ef-boot__quads i {
+  animation: efQuadOut var(--ef-boot-slide) cubic-bezier(0.7, 0, 0.24, 1) both;
+}
+
+.ef-boot[data-exiting="true"] .ef-boot__quads i:nth-child(1) { animation-delay: 0.06s; }
+.ef-boot[data-exiting="true"] .ef-boot__quads i:nth-child(2) { animation-delay: 0s; }
+.ef-boot[data-exiting="true"] .ef-boot__quads i:nth-child(3) { animation-delay: 0s; }
+.ef-boot[data-exiting="true"] .ef-boot__quads i:nth-child(4) { animation-delay: 0.06s; }
+
+@keyframes efBootIn {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+@keyframes efBootRise {
+  from { opacity: 0; transform: translateY(14px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+@keyframes efBootFadeOut {
+  to { opacity: 0; }
+}
+
+@keyframes efQuadOut {
+  from { transform: translate(0, 0) scale(1); opacity: 1; }
+  to { transform: translate(var(--qx), var(--qy)) scale(1.04); opacity: 0.72; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .ef-boot,
+  .ef-boot__readout,
+  .ef-boot__meta,
+  .ef-boot__rule {
+    animation: none;
+  }
+
+  .ef-boot[data-exiting="true"] {
+    animation: efBootFadeOut 0.18s ease forwards;
+  }
+
+  .ef-boot[data-exiting="true"] .ef-boot__quads i {
+    animation: none;
+  }
+}

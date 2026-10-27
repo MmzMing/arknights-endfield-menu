@@ -4,6 +4,14 @@ import { createTopoContourPaths } from "../lib/topo-contours";
 import type { DialogContent } from "../config/menu-content";
 import { TechStackIcon } from "./tech-stack-icon";
 import { createDialogPixelRenderer, rasterizeDialog, type DialogPixelRenderer } from "../scene/dialog-pixel-renderer";
+import {
+  dialogCardHeight,
+  dialogIsNarrow,
+  dialogPanelHeight,
+  dialogRasterKey,
+  peekDialogRaster,
+  rememberDialogRaster,
+} from "../scene/dialog-raster-cache";
 import { PIXEL_TRANSITION_DURATION } from "../lib/pixel-transition";
 import "../styles/info-dialog.css";
 
@@ -15,7 +23,27 @@ const CONTOUR_PATHS = createTopoContourPaths({
   seed: 20261024,
 });
 
-function DialogFace({ content }: { content: DialogContent }) {
+/** 入场起播前最多等快照的时间：超过就照常开跑，避免慢快照把弹窗拖成"点了没反应"。 */
+const ENTRANCE_GRACE_MS = 450;
+/** 快照晚到时留给组装段的最短可见时长：不足就把剩余相位放慢到这个长度。 */
+const ENTRANCE_MIN_TAIL_MS = 240;
+
+/** 弹窗等高线 defs：DialogFace 用 `<use>` 引用它，弹窗本体与空闲期的预栅格化各挂一份（两者不同时在场）。 */
+export function DialogContourDefs() {
+  return (
+    <svg width="0" height="0" className="ef-idlg__defs" aria-hidden="true">
+      <defs>
+        <g id="ef-idlg-contours" fill="none" stroke="#8f958f" strokeWidth="1">
+          {CONTOUR_PATHS.map((path, index) => (
+            <path key={index} d={path} strokeOpacity={index % 4 === 0 ? 0.48 : 0.22} />
+          ))}
+        </g>
+      </defs>
+    </svg>
+  );
+}
+
+export function DialogFace({ content }: { content: DialogContent }) {
   // pattern 必须用独立 id，避免整页其他副本引用到同一份。
   const wordUid = useId().replace(/[^a-zA-Z0-9_-]/g, "");
   const wordLineId = `ef-idlg-wordline-${wordUid}`;
@@ -217,18 +245,13 @@ export function InfoDialog({
   const reducedMotionRef = useRef<MediaQueryList | null>(null);
   const pixelPhaseRef = useRef(1);
   const closeStartPhaseRef = useRef(0);
-  const [isNarrow] = useState(() => window.matchMedia("(max-width: 720px)").matches);
+  const [isNarrow] = useState(dialogIsNarrow);
   // 站点入口弹窗带封面媒体块、RSS/友链弹窗带外链列表：卡片按内容加高（视口封顶），桌面端以 inline style
-  // 覆盖固定高度；窄屏走 CSS 的内容自适应高度，不加 inline。
-  const cardHeight =
-    content.image ||
-    content.links?.length ||
-    content.groups?.length ||
-    content.notice !== undefined ||
-    content.failures?.length
-      ? Math.min(780, Math.round((window.innerHeight - 48) / 0.72))
-      : 520;
-  const panelHeight = Math.round(cardHeight * 0.72);
+  // 覆盖固定高度；窄屏走 CSS 的内容自适应高度，不加 inline。尺寸口径与空闲期的预栅格化同源（scene/dialog-raster-cache.ts）。
+  const cardHeight = dialogCardHeight(content);
+  const panelHeight = dialogPanelHeight(cardHeight);
+  // 快照身份在挂载时定格：编排只跑一次，抓取中途更新的内容不进这份快照（与栅格化时机一致）。
+  const rasterKeyRef = useRef(dialogRasterKey(content, cardHeight));
 
   useEffect(() => {
     onCloseRef.current = onClose;
@@ -286,10 +309,11 @@ export function InfoDialog({
       };
     }
 
-    // 时间线从挂载即开始：遮罩与关闭按钮立刻响应，碎片相位按 400ms 推进（相位起点本就全透明，
-    // 画布无快照时看不出区别）；快照就绪后按当前进度接入，等待时间不叠加在动效之前。
+    // 时间线挂载即建，但延迟到快照就绪再起播：碎片相位 1 附近本就画不出东西，等它不产生空白，
+    // 却能让重文字量的弹窗（订阅）也播满整段；最多等 ENTRANCE_GRACE_MS，超时照常开跑。
     const playhead = { progress: 0 };
     const entrance = gsap.timeline({
+      paused: true,
       onComplete: () => {
         entranceTimelineRef.current = null;
         showStatic();
@@ -307,13 +331,35 @@ export function InfoDialog({
         },
       }, 0);
     entranceTimelineRef.current = entrance;
+    let entranceStarted = false;
+    const startEntrance = () => {
+      if (entranceStarted || disposed || closingRef.current) return;
+      entranceStarted = true;
+      window.clearTimeout(graceTimer);
+      entrance.play();
+    };
+    const graceTimer = window.setTimeout(startEntrance, ENTRANCE_GRACE_MS);
 
     const prepare = async () => {
       try {
-        const raster = await rasterizeDialog(shape);
+        // 同一份内容在空闲期已预栅格化时直接取用：现做快照要 200-500ms，赶不上 400ms 的入场窗口。
+        const cached = peekDialogRaster(rasterKeyRef.current);
+        let raster: HTMLCanvasElement;
+        if (cached !== null) {
+          raster = await cached;
+        } else {
+          raster = await rasterizeDialog(shape);
+          rememberDialogRaster(rasterKeyRef.current, Promise.resolve(raster));
+        }
         if (disposed || closingRef.current) return;
         renderer = createDialogPixelRenderer(canvas, raster);
         if (entranceTimelineRef.current && playhead.progress < 1) {
+          // 快照到得晚时把剩下的相位放慢到至少 MIN_TAIL：只剩几十毫秒的话用户等于没看到动效。
+          const remainingMs = PIXEL_TRANSITION_DURATION * (1 - playhead.progress) * 1000;
+          if (remainingMs < ENTRANCE_MIN_TAIL_MS) {
+            entrance.timeScale(remainingMs / ENTRANCE_MIN_TAIL_MS);
+          }
+          startEntrance();
           gsap.set(shape, { opacity: 0 });
           gsap.set(canvas, { opacity: 1 });
           renderer.draw(pixelPhaseRef.current);
@@ -343,6 +389,9 @@ export function InfoDialog({
       } catch (error) {
         if (disposed) return;
         console.warn("InfoDialog pixel transition unavailable", error);
+        window.clearTimeout(graceTimer);
+        entranceTimelineRef.current?.kill();
+        entranceTimelineRef.current = null;
         showStatic();
         closeTimelineRef.current = null;
       }
@@ -351,6 +400,7 @@ export function InfoDialog({
 
     return () => {
       disposed = true;
+      window.clearTimeout(graceTimer);
       entranceTimelineRef.current?.kill();
       closeTimelineRef.current?.kill();
       entranceTimelineRef.current = null;
@@ -371,15 +421,7 @@ export function InfoDialog({
   return (
     <div className="ef-idlg" ref={rootRef} role="dialog" aria-modal="true" aria-label={content.subtitle} data-phase="entering">
       <div className="ef-idlg__dim" onClick={requestClose} />
-      <svg width="0" height="0" className="ef-idlg__defs" aria-hidden="true">
-        <defs>
-          <g id="ef-idlg-contours" fill="none" stroke="#8f958f" strokeWidth="1">
-            {CONTOUR_PATHS.map((path, index) => (
-              <path key={index} d={path} strokeOpacity={index % 4 === 0 ? 0.48 : 0.22} />
-            ))}
-          </g>
-        </defs>
-      </svg>
+      <DialogContourDefs />
       <div className="ef-idlg__frame">
         <div className="ef-idlg__panel" style={isNarrow ? undefined : { height: panelHeight }}>
           <div className="ef-idlg__card" style={isNarrow ? undefined : { height: cardHeight }}>

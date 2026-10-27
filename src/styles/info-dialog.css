@@ -351,3 +351,16 @@ a.ef-idlg__failure:hover b, a.ef-idlg__failure:focus-visible b { text-decoration
   .ef-idlg__row > i { display: none; }
   .ef-idlg__value { min-width: 80px; padding: 5px 11px; font-size: 10px; }
 }
+
+/* 空闲期预栅格化用的同款结构（components/dialog-raster-warm.tsx）：整棵移出视口、不可交互，
+   只保留与弹窗一致的盒尺寸，让快照缓存和真正打开时画的是同一张图。 */
+.ef-idlg--warm {
+  top: 0;
+  left: -100000px;
+  right: auto;
+  bottom: auto;
+  width: 100%;
+  height: 100%;
+  opacity: 0;
+  pointer-events: none;
+}

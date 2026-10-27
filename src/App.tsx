@@ -23,7 +23,9 @@ import { PlayerBadge } from "./components/player-badge";
 import { ProfilePanel } from "./components/profile-panel";
 import { CloseButton, Hud, NetInfo } from "./components/hud";
 import { InfoDialog } from "./components/info-dialog";
-import { warmDialogFonts, warmDialogImages, warmDialogSnapshot } from "./scene/dialog-pixel-renderer";
+import { DialogRasterWarm } from "./components/dialog-raster-warm";
+import { BootScreen } from "./components/boot-screen";
+import { warmDialogFonts, warmDialogImages, warmDialogRenderer, warmDialogSnapshot } from "./scene/dialog-pixel-renderer";
 import { LegalFooter } from "./components/legal-footer";
 import { MusicDialog } from "./components/music-dialog";
 import { useMenuPhase } from "./hooks/use-menu-phase";
@@ -34,6 +36,11 @@ import { useStageScale } from "./hooks/use-stage-scale";
 /* App: assembles the menu exactly in the demo's mount order (app.js mountAll) and owns the two pieces of
    app-level state — the menu phase (body classes) and the open dialog. Everything inside the scene layers
    mounts through portals in tree order, which reproduces that order inside each layer. */
+
+/** 订阅弹窗预热口径：首屏可见的条目数（卡片最多 780px、行高约 31px，取两倍余量）与失败源条数。 */
+const VISIBLE_FEED_ITEMS = 24;
+const VISIBLE_FEED_FAILURES = 6;
+const noopRetry = () => {};
 
 /** Hands the scene's imperative api (pause/resume/stageScale) out of the tree. */
 function SceneBridge({ onScene }: { onScene: (api: SceneApi) => void }) {
@@ -48,7 +55,39 @@ export default function App() {
   const content = MENU_CONTENT;
   const menu = useMenuPhase();
   const [dialog, setDialog] = useState<string | null>(null);
+  // 首次访问（浏览器会话内）先跑全屏启动预设；完成后本会话不再展示（见 hooks/use-boot-screen.ts）。
+  // 每次进入页面（含刷新）都先跑全屏预设加载：模块级缓存在刷新时会清空，只挡首次会漏掉后续进入。
+  const [booting, setBooting] = useState(true);
+  const finishBoot = useCallback(() => setBooting(false), []);
+  // 启动页读数下方那一行身份资料直接取玩家徽章那一份，改配置即改启动页。
+  const bootIdentity = useMemo(
+    () => ({
+      name: content.player.name,
+      code: content.player.uid.replace(/^UID\s*[:：]\s*/i, ""),
+    }),
+    [content.player],
+  );
   const feeds = useFeeds(dialog === "rss", menu.phase === "open");
+  // 弹窗快照的输入在配置里已知：启动页与空闲预热共用同一份，避免重复拼装。
+  // 订阅文案随抓取实时变化，按首屏可见的前若干条预热，与快照的可见文字选择同口径。
+  const dialogPresets = useMemo(() => {
+    const feedPreview = feedDialog(
+      {
+        ...feeds.data,
+        items: feeds.data.items.slice(0, VISIBLE_FEED_ITEMS),
+        failures: (feeds.data.failures ?? []).slice(0, VISIBLE_FEED_FAILURES),
+      },
+      feeds.status,
+      feeds.isLive,
+      noopRetry,
+    );
+    return {
+      texts: [...Object.values(content.dialogs), friendsDialog(), feedPreview].map((dialogContent) =>
+        collectDialogText(dialogContent),
+      ),
+      images: SITE_LINKS.map((link) => link.image),
+    };
+  }, [content, feeds.data, feeds.isLive, feeds.status]);
   const music = useMusicPlayer(dialog === "music");
   const [announcement, setAnnouncement] = useState<NewsSlide | null>(null);
   const [profileOpen, setProfileOpen] = useState(false);
@@ -62,13 +101,15 @@ export default function App() {
   }, []);
   const openProfile = useCallback(() => setProfileOpen(true), []);
   const closeProfile = useCallback(() => setProfileOpen(false), []);
+  // 订阅内容与空闲期预栅格化必须取自同一份数据，快照缓存的 key 才会命中。
+  const feedContent = feedDialog(feeds.data, feeds.status, feeds.isLive, feeds.refresh);
   const dialogContent =
     announcement !== null
       ? announcementDialog(announcement)
       : dialog === null || dialog === "music"
         ? null
         : dialog === "rss"
-          ? feedDialog(feeds.data, feeds.status, feeds.isLive, feeds.refresh)
+          ? feedContent
           : dialog === "friends"
             ? friendsDialog()
             : dialogFor(dialog, content);
@@ -94,19 +135,16 @@ export default function App() {
 
   // the dialog transition needs an embedded-font stylesheet snapshot. Build it only after the entrance has
   // settled and the menu is idle, so the one-off ~60ms task never lands inside the entrance animation.
+  // 首次访问时启动页已经把同一批预设跑完，这里的空闲预热只服务于跳过启动页的会话。
   useEffect(() => {
-    if (menu.phase !== "open") return;
+    if (menu.phase !== "open" || booting) return;
     let timer = 0;
     let idle = 0;
     const warm = () => {
-      warmDialogImages(SITE_LINKS.map((link) => link.image));
-      warmDialogSnapshot();
-      // 静态弹窗文案在配置里已知：空闲时把覆盖到的字体子集预取完，打开时快照不再等网络。
-      warmDialogFonts(
-        [...Object.values(content.dialogs), friendsDialog()].map((dialogContent) =>
-          collectDialogText(dialogContent),
-        ),
-      );
+      void warmDialogImages(dialogPresets.images);
+      void warmDialogSnapshot();
+      void warmDialogFonts(dialogPresets.texts);
+      void warmDialogRenderer();
     };
     const run = () => {
       if (typeof window.requestIdleCallback !== "function") {
@@ -120,7 +158,7 @@ export default function App() {
       window.clearTimeout(timer);
       if (idle) window.cancelIdleCallback(idle);
     };
-  }, [menu.phase, content]);
+  }, [booting, dialogPresets, menu.phase]);
 
   const actions = useMemo(
     () => ({
@@ -137,13 +175,13 @@ export default function App() {
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
       if (e.key !== "Escape") return;
-      if (dialog !== null || announcement !== null || profileOpen) return;
+      if (booting || dialog !== null || announcement !== null || profileOpen) return;
       if (menu.phase === "entering" || menu.phase === "open") menu.close();
       else menu.open();
     };
     document.addEventListener("keydown", onKey);
     return () => document.removeEventListener("keydown", onKey);
-  }, [announcement, dialog, menu, profileOpen]);
+  }, [announcement, booting, dialog, menu, profileOpen]);
 
   // clicking the letterbox around the stage closes the menu (the demo's #efMenu self-click)
   const onOverlayClick = useCallback(
@@ -223,6 +261,23 @@ export default function App() {
           music={music}
           startDate={content.siteStartDate}
           onClose={closeProfile}
+        />
+      )}
+      {!booting &&
+        menu.phase === "open" &&
+        feeds.status === "ready" &&
+        dialog === null &&
+        announcement === null &&
+        !profileOpen && (
+          // 订阅弹窗是这里最重的一份快照：抓取落定后在空闲期先栅格化，打开时才来得及播满入场。
+          <DialogRasterWarm content={feedContent} />
+        )}
+      {booting && (
+        <BootScreen
+          texts={dialogPresets.texts}
+          images={dialogPresets.images}
+          identity={bootIdentity}
+          onDone={finishBoot}
         />
       )}
     </MenuActionsContext.Provider>
