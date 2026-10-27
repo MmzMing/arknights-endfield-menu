@@ -300,28 +300,56 @@ export function createDialogPixelRenderer(
 }
 
 const imageCache = new Map<string, Promise<string | null>>();
+const SNAPSHOT_IMAGE_MAX_WIDTH = 1280;
 
-async function imageAsDataUrl(image: HTMLImageElement): Promise<string | null> {
-  if (!image.currentSrc && !image.src) return null;
+/** 封面只用于 400ms 转场，按 2x 展示宽度重编码，避免把原图整份塞进 SVG 拖慢首次解码。 */
+async function shrinkImage(bytes: Uint8Array, type: string): Promise<string> {
   try {
-    if (!image.complete) await image.decode();
-    const response = await fetch(image.currentSrc || image.src);
-    const blob = await response.blob();
-    return await new Promise<string>((resolve, reject) => {
-      const reader = new FileReader();
-      reader.onload = () => resolve(String(reader.result));
-      reader.onerror = () => reject(reader.error);
-      reader.readAsDataURL(blob);
-    });
+    const bitmap = await createImageBitmap(new Blob([bytes.slice().buffer], { type }));
+    const scale = Math.min(1, SNAPSHOT_IMAGE_MAX_WIDTH / bitmap.width);
+    const canvas = document.createElement("canvas");
+    canvas.width = Math.max(1, Math.round(bitmap.width * scale));
+    canvas.height = Math.max(1, Math.round(bitmap.height * scale));
+    const context = canvas.getContext("2d");
+    if (!context) return bytesToDataUrl(bytes, type);
+    context.imageSmoothingQuality = "high";
+    context.drawImage(bitmap, 0, 0, canvas.width, canvas.height);
+    bitmap.close();
+    return canvas.toDataURL("image/webp", 0.86);
   } catch {
-    return null;
+    return bytesToDataUrl(bytes, type);
   }
+}
+
+function cacheImage(url: string): Promise<string | null> {
+  const absolute = new URL(url, window.location.href).href;
+  let pending = imageCache.get(absolute);
+  if (!pending) {
+    pending = (async () => {
+      try {
+        const response = await fetch(absolute);
+        const bytes = new Uint8Array(await response.arrayBuffer());
+        return await shrinkImage(bytes, response.headers.get("content-type") ?? "image/webp");
+      } catch {
+        return null;
+      }
+    })();
+    imageCache.set(absolute, pending);
+  }
+  return pending;
+}
+
+/** 菜单空闲时预取弹窗封面，避免首次打开时等待大图下载与转码。 */
+export function warmDialogImages(urls: string[]): void {
+  urls.forEach((url) => {
+    void cacheImage(url);
+  });
 }
 
 const CSS_URL = /url\((["']?)([^"')]+)\1\)/g;
 
-/** 弹窗实际使用的字体家族；其余字体不内嵌，减少预热耗时。 */
-const DIALOG_FONT_FILES = /(noto-sans-sc|rajdhani|jetbrains-mono)-/;
+/** 弹窗实际使用的字体家族；其余字体不进入快照。 */
+const DIALOG_FONT_FAMILIES = new Set(["Noto Sans SC", "Rajdhani", "JetBrains Mono"]);
 
 function bytesToDataUrl(bytes: Uint8Array, type: string): string {
   let binary = "";
@@ -331,49 +359,31 @@ function bytesToDataUrl(bytes: Uint8Array, type: string): string {
   return `data:${type};base64,${btoa(binary)}`;
 }
 
-async function embedDialogFonts(): Promise<Map<string, string>> {
-  const entries = performance
-    .getEntriesByType("resource")
-    .map((entry) => entry.name)
-    .filter((url) => DIALOG_FONT_FILES.test(url));
-  const embedded = new Map<string, string>();
-  await Promise.all(entries.map(async (url) => {
-    try {
-      const response = await fetch(url);
-      const bytes = new Uint8Array(await response.arrayBuffer());
-      embedded.set(new URL(url, window.location.href).href, bytesToDataUrl(bytes, "font/woff2"));
-    } catch {
-      // 缺失字体不进入快照样式，避免画布被外部资源污染。
-    }
-  }));
-  return embedded;
+type FontFaceEntry = {
+  cssText: string;
+  urls: string[];
+  ranges: [number, number][] | null;
+};
+
+type CssIndex = { base: string; faces: FontFaceEntry[] };
+
+function parseUnicodeRange(value: string): [number, number][] | null {
+  if (!value) return null;
+  const ranges: [number, number][] = [];
+  for (const part of value.split(",")) {
+    const match = /u\+([0-9a-f?]+)(?:-([0-9a-f]+))?/i.exec(part.trim());
+    if (!match?.[1]) continue;
+    const start = match[1];
+    const low = parseInt(start.replace(/\?/g, "0"), 16);
+    const high = parseInt((match[2] ?? start).replace(/\?/g, "f"), 16);
+    if (Number.isFinite(low) && Number.isFinite(high)) ranges.push([low, high]);
+  }
+  return ranges.length > 0 ? ranges : null;
 }
 
-let dialogCssPromise: Promise<string> | null = null;
-
-function getDialogCss(): Promise<string> {
-  dialogCssPromise ??= embedDialogFonts().then(snapshotCss);
-  return dialogCssPromise;
-}
-
-/** 菜单打开后空闲时预热：把内嵌字体的整站样式先拼好，弹窗打开时只剩布局与栅格化。 */
-export function warmDialogSnapshot(): void {
-  void getDialogCss();
-}
-
-function snapshotCss(fonts: Map<string, string>): string {
-  const embeddedFontFace = (rule: CSSFontFaceRule): string | null => {
-    const urls = Array.from(rule.cssText.matchAll(CSS_URL), (match) => {
-      const path = match[2];
-      return path ? new URL(path, window.location.href).href : "";
-    });
-    if (urls.length === 0 || urls.some((url) => !url || !fonts.has(url))) return null;
-    return rule.cssText.replace(CSS_URL, (source, _quote: string, path: string) => {
-      const dataUrl = fonts.get(new URL(path, window.location.href).href);
-      return dataUrl ? `url("${dataUrl}")` : source;
-    });
-  };
-  let css = "";
+function buildCssIndex(): CssIndex {
+  let base = "";
+  const faces: FontFaceEntry[] = [];
   for (const sheet of document.styleSheets) {
     let rules: CSSRuleList;
     try {
@@ -382,15 +392,89 @@ function snapshotCss(fonts: Map<string, string>): string {
       continue;
     }
     for (const rule of Array.from(rules)) {
-      if (rule instanceof CSSFontFaceRule) {
-        const face = embeddedFontFace(rule);
-        if (face) css += `${face}\n`;
-      } else {
-        css += `${rule.cssText}\n`;
+      if (!(rule instanceof CSSFontFaceRule)) {
+        base += `${rule.cssText}\n`;
+        continue;
       }
+      const family = rule.style.getPropertyValue("font-family").replace(/["']/g, "").trim();
+      if (!DIALOG_FONT_FAMILIES.has(family)) continue;
+      const urls = Array.from(rule.cssText.matchAll(CSS_URL), (match) => {
+        const path = match[2];
+        return path ? new URL(path, window.location.href).href : "";
+      });
+      if (urls.length === 0 || urls.some((url) => !url)) continue;
+      faces.push({
+        cssText: rule.cssText,
+        urls,
+        ranges: parseUnicodeRange(rule.style.getPropertyValue("unicode-range")),
+      });
     }
   }
-  return css;
+  return { base, faces };
+}
+
+let cssIndexPromise: Promise<CssIndex> | null = null;
+const fontDataCache = new Map<string, Promise<string | null>>();
+const dialogCssCache = new Map<string, Promise<string>>();
+
+function getCssIndex(): Promise<CssIndex> {
+  cssIndexPromise ??= Promise.resolve().then(buildCssIndex);
+  return cssIndexPromise;
+}
+
+function getFontData(url: string): Promise<string | null> {
+  let pending = fontDataCache.get(url);
+  if (!pending) {
+    pending = (async () => {
+      try {
+        const response = await fetch(url);
+        const bytes = new Uint8Array(await response.arrayBuffer());
+        return bytesToDataUrl(bytes, "font/woff2");
+      } catch {
+        return null;
+      }
+    })();
+    fontDataCache.set(url, pending);
+  }
+  return pending;
+}
+
+function fontCoversText(face: FontFaceEntry, codePoints: ReadonlySet<number>): boolean {
+  if (!face.ranges) return true;
+  for (const codePoint of codePoints) {
+    if (face.ranges.some(([low, high]) => codePoint >= low && codePoint <= high)) return true;
+  }
+  return false;
+}
+
+async function getDialogCss(text: string): Promise<string> {
+  const { base, faces } = await getCssIndex();
+  const codePoints = new Set(Array.from(text, (char) => char.codePointAt(0) ?? 0));
+  const selected = faces.filter((face) => fontCoversText(face, codePoints));
+  const urls = Array.from(new Set(selected.flatMap((face) => face.urls))).sort();
+  const key = urls.join("|");
+  let pending = dialogCssCache.get(key);
+  if (!pending) {
+    pending = (async () => {
+      const embedded = new Map(await Promise.all(urls.map(async (url) => [url, await getFontData(url)] as const)));
+      let css = base;
+      for (const face of selected) {
+        if (face.urls.some((url) => !embedded.get(url))) continue;
+        css += `${face.cssText.replace(CSS_URL, (source, _quote: string, path: string) => {
+          const dataUrl = embedded.get(new URL(path, window.location.href).href);
+          return dataUrl ? `url("${dataUrl}")` : source;
+        })}\n`;
+      }
+      return css;
+    })();
+    dialogCssCache.set(key, pending);
+  }
+  return pending;
+}
+
+/** 菜单空闲时预热：解析样式表与字体族索引，弹窗打开时只取当前文字覆盖的子集。 */
+export function warmDialogSnapshot(): void {
+  void getCssIndex();
 }
 
 export async function rasterizeDialog(sourceElement: HTMLElement): Promise<HTMLCanvasElement> {
@@ -408,17 +492,12 @@ export async function rasterizeDialog(sourceElement: HTMLElement): Promise<HTMLC
   const cloneImages = Array.from(clone.querySelectorAll("img"));
   await Promise.all(sourceImages.map(async (image, index) => {
     const sourceUrl = image.currentSrc || image.src;
-    let pending = imageCache.get(sourceUrl);
-    if (!pending) {
-      pending = imageAsDataUrl(image);
-      imageCache.set(sourceUrl, pending);
-    }
-    const dataUrl = await pending;
+    const dataUrl = sourceUrl ? await cacheImage(sourceUrl) : null;
     const cloned = cloneImages[index];
     if (dataUrl && cloned) cloned.src = dataUrl;
   }));
   clone.querySelectorAll("canvas").forEach((canvas) => canvas.remove());
-  const css = await getDialogCss();
+  const css = await getDialogCss(sourceElement.textContent ?? "");
   const serialized = new XMLSerializer().serializeToString(clone);
   const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="${viewportWidth}" height="${viewportHeight}"><foreignObject width="100%" height="100%"><style><![CDATA[${css}]]></style><div xmlns="http://www.w3.org/1999/xhtml" style="position:absolute;left:0;top:0;width:${width}px;height:${height}px">${serialized}</div></foreignObject></svg>`;
   const image = new Image();

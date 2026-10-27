@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { MENU_CONTENT, announcementDialog, dialogFor, feedDialog, friendsDialog } from "./config/menu-content";
 import { FRIEND_LINKS } from "./config/friend-links";
+import { SITE_LINKS } from "./config/link-config";
 import { TECH_STACK_COUNT, TECH_STACK_LABEL } from "./config/profile-panel-config";
 import { MenuActionsContext } from "./menu-actions";
 import { SceneLayer, SceneProvider, useScene, type SceneApi } from "./scene/scene-context";
@@ -22,7 +23,7 @@ import { PlayerBadge } from "./components/player-badge";
 import { ProfilePanel } from "./components/profile-panel";
 import { CloseButton, Hud, NetInfo } from "./components/hud";
 import { InfoDialog } from "./components/info-dialog";
-import { warmDialogSnapshot } from "./scene/dialog-pixel-renderer";
+import { warmDialogImages, warmDialogSnapshot } from "./scene/dialog-pixel-renderer";
 import { LegalFooter } from "./components/legal-footer";
 import { MusicDialog } from "./components/music-dialog";
 import { useMenuPhase } from "./hooks/use-menu-phase";
@@ -97,12 +98,16 @@ export default function App() {
     if (menu.phase !== "open") return;
     let timer = 0;
     let idle = 0;
+    const warm = () => {
+      warmDialogImages(SITE_LINKS.map((link) => link.image));
+      warmDialogSnapshot();
+    };
     const run = () => {
       if (typeof window.requestIdleCallback !== "function") {
-        warmDialogSnapshot();
+        warm();
         return;
       }
-      idle = window.requestIdleCallback(() => warmDialogSnapshot(), { timeout: 2000 });
+      idle = window.requestIdleCallback(warm, { timeout: 2000 });
     };
     timer = window.setTimeout(run, 500);
     return () => {

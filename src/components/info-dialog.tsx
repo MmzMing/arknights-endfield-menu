@@ -215,6 +215,8 @@ export function InfoDialog({
   const entranceTimelineRef = useRef<gsap.core.Timeline | null>(null);
   const onCloseRef = useRef(onClose);
   const reducedMotionRef = useRef<MediaQueryList | null>(null);
+  const pixelPhaseRef = useRef(1);
+  const closeStartPhaseRef = useRef(0);
   const [isNarrow] = useState(() => window.matchMedia("(max-width: 720px)").matches);
   // 站点入口弹窗带封面媒体块、RSS/友链弹窗带外链列表：卡片按内容加高（视口封顶），桌面端以 inline style
   // 覆盖固定高度；窄屏走 CSS 的内容自适应高度，不加 inline。
@@ -243,8 +245,11 @@ export function InfoDialog({
       return;
     }
     const timeline = closeTimelineRef.current;
-    if (timeline) timeline.play(0);
-    else onCloseRef.current();
+    if (timeline) {
+      // 入场中关闭时从当前碎片相位继续，而不是跳回完整面板再消融。
+      closeStartPhaseRef.current = pixelPhaseRef.current;
+      timeline.play(0);
+    } else onCloseRef.current();
   }, []);
 
   useLayoutEffect(() => {
@@ -264,13 +269,15 @@ export function InfoDialog({
     let renderer: DialogPixelRenderer | null = null;
 
     const showStatic = () => {
+      pixelPhaseRef.current = 0;
       gsap.set([shape, close, dim], { opacity: 1 });
       gsap.set(canvas, { opacity: 0 });
       root.style.setProperty("--ef-idlg-shadow", "1");
       root.dataset.phase = "open";
     };
 
-    gsap.set(dim, { opacity: 0 });
+    // 快照准备期间先让遮罩立刻反馈点击，但不盖住后续转场的时间线。
+    gsap.to(dim, { opacity: 1, duration: 0.12, ease: "none" });
     gsap.set(close, { opacity: 0 });
     if (motion.matches) {
       showStatic();
@@ -279,39 +286,35 @@ export function InfoDialog({
       };
     }
 
-    // 时间线从挂载即开始：快照稍后就绪时按当前进度接入，等待时间不再叠加在 400ms 之外。
-    const playhead = { progress: 0 };
-    const entrance = gsap.timeline({
-      onComplete: () => {
-        entranceTimelineRef.current = null;
-        showStatic();
-      },
-    });
-    entrance
-      .to(dim, { opacity: 1, duration: 0.12, ease: "none" }, 0)
-      .to(close, { opacity: 1, duration: 0.12, ease: "none" }, 0.08)
-      .to(playhead, {
-        progress: 1,
-        duration: PIXEL_TRANSITION_DURATION,
-        ease: "none",
-        onUpdate: () => renderer?.draw(1 - playhead.progress),
-      }, 0);
-    entranceTimelineRef.current = entrance;
-
     const prepare = async () => {
       try {
         const raster = await rasterizeDialog(shape);
         if (disposed) return;
         renderer = createDialogPixelRenderer(canvas, raster);
-        if (closingRef.current || playhead.progress >= 1) {
-          renderer.destroy();
-          renderer = null;
-          return;
-        }
-        renderer.draw(1 - playhead.progress);
+        // 入场必须等快照就绪后再开始；大封面首次取图可能超过 400ms，先跑时间线会让动效整段丢失。
+        renderer.draw(1);
         gsap.set(shape, { opacity: 0 });
         gsap.set(canvas, { opacity: 1 });
-        const closePlayhead = { progress: 0 };
+        const playhead = { progress: 0 };
+        const entrance = gsap.timeline({
+          onComplete: () => {
+            entranceTimelineRef.current = null;
+            showStatic();
+          },
+        });
+        entrance
+          .to(close, { opacity: 1, duration: 0.12, ease: "none" }, 0.08)
+          .to(playhead, {
+            progress: 1,
+            duration: PIXEL_TRANSITION_DURATION,
+            ease: "none",
+            onUpdate: () => {
+              pixelPhaseRef.current = 1 - playhead.progress;
+              renderer?.draw(pixelPhaseRef.current);
+            },
+          }, 0);
+        entranceTimelineRef.current = entrance;
+        const closeDriver = { value: 0 };
         const closeTimeline = gsap.timeline({
           paused: true,
           onComplete: () => onCloseRef.current(),
@@ -320,11 +323,15 @@ export function InfoDialog({
           .set(shape, { opacity: 0 }, 0)
           .set(canvas, { opacity: 1 }, 0)
           .to(close, { opacity: 0, duration: 0.08, ease: "none" }, 0)
-          .to(closePlayhead, {
-            progress: 1,
+          .to(closeDriver, {
+            value: 1,
             duration: PIXEL_TRANSITION_DURATION,
             ease: "none",
-            onUpdate: () => renderer?.draw(closePlayhead.progress),
+            onUpdate: () => {
+              const start = closeStartPhaseRef.current;
+              pixelPhaseRef.current = start + (1 - start) * closeDriver.value;
+              renderer?.draw(pixelPhaseRef.current);
+            },
           }, 0)
           .to(dim, { opacity: 0, duration: 0.12, ease: "none" }, PIXEL_TRANSITION_DURATION - 0.12);
         closeTimelineRef.current = closeTimeline;
