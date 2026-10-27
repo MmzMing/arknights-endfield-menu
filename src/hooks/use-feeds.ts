@@ -176,6 +176,7 @@ export function useFeeds(active: boolean, enabled = true): FeedView {
         if (!response.ok) throw new Error(`feeds api ${response.status}`);
         const snapshot = parseSnapshot(await response.json());
         if (snapshot === null) throw new Error("feeds api returned an invalid payload");
+        if (sweep.signal.aborted || inflight.current !== sweep) return;
         outcomes[index] = snapshot;
         batchStore[index] = snapshot;
       } catch {
@@ -188,6 +189,7 @@ export function useFeeds(active: boolean, enabled = true): FeedView {
 
     await Promise.all(toFetch.map((index) => loadBatch(index)));
     clearTimeout(timer);
+    if (inflight.current === sweep) inflight.current = null;
   }, []);
 
   useEffect(() => {

@@ -3,14 +3,13 @@ import { gsap } from "gsap";
 import { createTopoContourPaths } from "../lib/topo-contours";
 import type { DialogContent } from "../config/menu-content";
 import { TechStackIcon } from "./tech-stack-icon";
-import { createDialogPixelRenderer, rasterizeDialog, type DialogPixelRenderer } from "../scene/dialog-pixel-renderer";
+import { acquireDialogPixelRenderer, rasterizeDialog } from "../scene/dialog-pixel-renderer";
 import {
   dialogCardHeight,
   dialogIsNarrow,
   dialogPanelHeight,
   dialogRasterKey,
-  peekDialogRaster,
-  rememberDialogRaster,
+  getDialogRaster,
 } from "../scene/dialog-raster-cache";
 import { PIXEL_TRANSITION_DURATION } from "../lib/pixel-transition";
 import "../styles/info-dialog.css";
@@ -28,7 +27,7 @@ const ENTRANCE_GRACE_MS = 450;
 /** 快照晚到时留给组装段的最短可见时长：不足就把剩余相位放慢到这个长度。 */
 const ENTRANCE_MIN_TAIL_MS = 240;
 
-/** 弹窗等高线 defs：DialogFace 用 `<use>` 引用它，弹窗本体与空闲期的预栅格化各挂一份（两者不同时在场）。 */
+/** 弹窗与预热快照共用页面中唯一一份等高线定义。 */
 export function DialogContourDefs() {
   return (
     <svg width="0" height="0" className="ef-idlg__defs" aria-hidden="true">
@@ -229,14 +228,19 @@ export function DialogFace({ content }: { content: DialogContent }) {
 
 export function InfoDialog({
   content,
+  canAnimate,
   onClose,
 }: {
   content: DialogContent;
+  canAnimate: boolean;
   onClose: () => void;
 }) {
+  const [initialContent] = useState(content);
+  const [hasEntered, setHasEntered] = useState(false);
+  const displayContent = hasEntered ? content : initialContent;
   const rootRef = useRef<HTMLDivElement>(null);
   const shapeRef = useRef<HTMLDivElement>(null);
-  const canvasRef = useRef<HTMLCanvasElement>(null);
+  const canvasRef = useRef<HTMLDivElement>(null);
   const closeRef = useRef<HTMLButtonElement>(null);
   const closingRef = useRef(false);
   const closeTimelineRef = useRef<gsap.core.Timeline | null>(null);
@@ -248,10 +252,10 @@ export function InfoDialog({
   const [isNarrow] = useState(dialogIsNarrow);
   // 站点入口弹窗带封面媒体块、RSS/友链弹窗带外链列表：卡片按内容加高（视口封顶），桌面端以 inline style
   // 覆盖固定高度；窄屏走 CSS 的内容自适应高度，不加 inline。尺寸口径与空闲期的预栅格化同源（scene/dialog-raster-cache.ts）。
-  const cardHeight = dialogCardHeight(content);
+  const cardHeight = dialogCardHeight(displayContent);
   const panelHeight = dialogPanelHeight(cardHeight);
   // 快照身份在挂载时定格：编排只跑一次，抓取中途更新的内容不进这份快照（与栅格化时机一致）。
-  const rasterKeyRef = useRef(dialogRasterKey(content, cardHeight));
+  const [rasterKey] = useState(() => dialogRasterKey(initialContent, cardHeight));
 
   useEffect(() => {
     onCloseRef.current = onClose;
@@ -289,9 +293,11 @@ export function InfoDialog({
     root.dataset.phase = "entering";
     close.focus({ preventScroll: true });
     let disposed = false;
-    let renderer: DialogPixelRenderer | null = null;
+    let renderer: ReturnType<typeof acquireDialogPixelRenderer> | null = null;
 
     const showStatic = () => {
+      if (disposed || closingRef.current) return;
+      setHasEntered(true);
       pixelPhaseRef.current = 0;
       gsap.set([shape, close, dim], { opacity: 1 });
       gsap.set(canvas, { opacity: 0 });
@@ -300,11 +306,13 @@ export function InfoDialog({
     };
 
     // 快照准备期间先让遮罩立刻反馈点击，但不盖住后续转场的时间线。
-    gsap.to(dim, { opacity: 1, duration: 0.12, ease: "none" });
+    const dimTween = gsap.to(dim, { opacity: 1, duration: 0.12, ease: "none" });
     gsap.set(close, { opacity: 0 });
-    if (motion.matches) {
+    if (motion.matches || !canAnimate) {
       showStatic();
       return () => {
+        disposed = true;
+        dimTween.kill();
         if (previousFocus?.isConnected) previousFocus.focus({ preventScroll: true });
       };
     }
@@ -343,16 +351,9 @@ export function InfoDialog({
     const prepare = async () => {
       try {
         // 同一份内容在空闲期已预栅格化时直接取用：现做快照要 200-500ms，赶不上 400ms 的入场窗口。
-        const cached = peekDialogRaster(rasterKeyRef.current);
-        let raster: HTMLCanvasElement;
-        if (cached !== null) {
-          raster = await cached;
-        } else {
-          raster = await rasterizeDialog(shape);
-          rememberDialogRaster(rasterKeyRef.current, Promise.resolve(raster));
-        }
+        const raster = await getDialogRaster(rasterKey, () => rasterizeDialog(shape));
         if (disposed || closingRef.current) return;
-        renderer = createDialogPixelRenderer(canvas, raster);
+        renderer = acquireDialogPixelRenderer(canvas, raster);
         if (entranceTimelineRef.current && playhead.progress < 1) {
           // 快照到得晚时把剩下的相位放慢到至少 MIN_TAIL：只剩几十毫秒的话用户等于没看到动效。
           const remainingMs = PIXEL_TRANSITION_DURATION * (1 - playhead.progress) * 1000;
@@ -387,7 +388,7 @@ export function InfoDialog({
           .to(dim, { opacity: 0, duration: 0.12, ease: "none" }, PIXEL_TRANSITION_DURATION - 0.12);
         closeTimelineRef.current = closeTimeline;
       } catch (error) {
-        if (disposed) return;
+        if (disposed || closingRef.current) return;
         console.warn("InfoDialog pixel transition unavailable", error);
         window.clearTimeout(graceTimer);
         entranceTimelineRef.current?.kill();
@@ -405,10 +406,11 @@ export function InfoDialog({
       closeTimelineRef.current?.kill();
       entranceTimelineRef.current = null;
       closeTimelineRef.current = null;
-      renderer?.destroy();
+      dimTween.kill();
+      renderer?.release();
       if (previousFocus?.isConnected) previousFocus.focus({ preventScroll: true });
     };
-  }, []);
+  }, [canAnimate, rasterKey]);
 
   useEffect(() => {
     const onKey = (event: KeyboardEvent) => {
@@ -419,16 +421,15 @@ export function InfoDialog({
   }, [requestClose]);
 
   return (
-    <div className="ef-idlg" ref={rootRef} role="dialog" aria-modal="true" aria-label={content.subtitle} data-phase="entering">
+    <div className="ef-idlg" ref={rootRef} role="dialog" aria-modal="true" aria-label={displayContent.subtitle} data-phase="entering">
       <div className="ef-idlg__dim" onClick={requestClose} />
-      <DialogContourDefs />
       <div className="ef-idlg__frame">
         <div className="ef-idlg__panel" style={isNarrow ? undefined : { height: panelHeight }}>
           <div className="ef-idlg__card" style={isNarrow ? undefined : { height: cardHeight }}>
-            <canvas className="ef-idlg__pixels" ref={canvasRef} aria-hidden="true" />
+            <div className="ef-idlg__pixels" ref={canvasRef} aria-hidden="true" />
             <div className="ef-idlg__shape" ref={shapeRef}>
               <div className="ef-idlg__rim" aria-hidden="true" />
-              <DialogFace content={content} />
+              <DialogFace content={displayContent} />
             </div>
             <button className="ef-idlg__close" ref={closeRef} title="关闭" aria-label="关闭" onClick={requestClose}>
               <svg viewBox="0 0 24 24" aria-hidden="true">

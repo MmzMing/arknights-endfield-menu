@@ -113,6 +113,11 @@
   transition: width 0.18s linear;
 }
 
+.ef-boot__error { max-width: min(520px, 85vw); padding-top: 16px; text-align: center; font-size: 13px; line-height: 1.6; }
+.ef-boot__actions { display: flex; justify-content: center; flex-wrap: wrap; gap: 12px; margin-top: 12px; }
+.ef-boot__actions button { padding: 8px 14px; border: 1px solid currentColor; background: transparent; color: inherit; font: inherit; }
+.ef-boot__actions button:focus-visible { outline: 2px solid currentColor; outline-offset: 3px; }
+
 /* ---- 退场：读数先隐，四象限各自朝本角滑出 ---- */
 
 .ef-boot[data-exiting="true"] .ef-boot__readout,

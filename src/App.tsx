@@ -22,12 +22,13 @@ import { NewsBelt, NewsPanel, type NewsSlide } from "./components/news-panel";
 import { PlayerBadge } from "./components/player-badge";
 import { ProfilePanel } from "./components/profile-panel";
 import { CloseButton, Hud, NetInfo } from "./components/hud";
-import { InfoDialog } from "./components/info-dialog";
+import { DialogContourDefs, InfoDialog } from "./components/info-dialog";
 import { DialogRasterWarm } from "./components/dialog-raster-warm";
 import { BootScreen } from "./components/boot-screen";
-import { warmDialogFonts, warmDialogImages, warmDialogRenderer, warmDialogSnapshot } from "./scene/dialog-pixel-renderer";
 import { LegalFooter } from "./components/legal-footer";
 import { MusicDialog } from "./components/music-dialog";
+import { warmDialogRenderer } from "./scene/dialog-pixel-renderer";
+import { useDialogViewport } from "./hooks/use-dialog-viewport";
 import { useMenuPhase } from "./hooks/use-menu-phase";
 import { useFeeds } from "./hooks/use-feeds";
 import { useMusicPlayer } from "./hooks/use-music-player";
@@ -55,39 +56,53 @@ export default function App() {
   const content = MENU_CONTENT;
   const menu = useMenuPhase();
   const [dialog, setDialog] = useState<string | null>(null);
-  // 首次访问（浏览器会话内）先跑全屏启动预设；完成后本会话不再展示（见 hooks/use-boot-screen.ts）。
-  // 每次进入页面（含刷新）都先跑全屏预设加载：模块级缓存在刷新时会清空，只挡首次会漏掉后续进入。
   const [booting, setBooting] = useState(true);
-  const finishBoot = useCallback(() => setBooting(false), []);
-  // 启动页读数下方那一行身份资料直接取玩家徽章那一份，改配置即改启动页。
+  const [canAnimate, setCanAnimate] = useState(false);
+  const [feedWaitOver, setFeedWaitOver] = useState(false);
+  const [pageEpoch, setPageEpoch] = useState(0);
+  const viewport = useDialogViewport();
+  useEffect(() => {
+    const timer = window.setTimeout(() => setFeedWaitOver(true), 3000);
+    return () => window.clearTimeout(timer);
+  }, []);
+  useEffect(() => {
+    // pagehide 会归还 WebGL 上下文；从 bfcache 回来时重挂当前弹窗并在后台重建管线。
+    const onPageShow = (event: PageTransitionEvent) => {
+      if (!event.persisted) return;
+      setPageEpoch((value) => value + 1);
+      if (canAnimate) void warmDialogRenderer().catch(() => undefined);
+    };
+    window.addEventListener("pageshow", onPageShow);
+    return () => window.removeEventListener("pageshow", onPageShow);
+  }, [canAnimate]);
+  const finishBoot = useCallback((animate: boolean) => {
+    setCanAnimate(animate);
+    setBooting(false);
+  }, []);
   const bootIdentity = useMemo(
-    () => ({
-      name: content.player.name,
-      code: content.player.uid.replace(/^UID\s*[:：]\s*/i, ""),
-    }),
+    () => ({ name: content.player.name, code: content.player.uid.replace(/^UID\s*[:：]\s*/i, "") }),
     [content.player],
   );
-  const feeds = useFeeds(dialog === "rss", menu.phase === "open");
-  // 弹窗快照的输入在配置里已知：启动页与空闲预热共用同一份，避免重复拼装。
-  // 订阅文案随抓取实时变化，按首屏可见的前若干条预热，与快照的可见文字选择同口径。
+  const feeds = useFeeds(dialog === "rss");
+  const essentialDialogs = useMemo(() => [
+    ...Object.values(content.dialogs),
+    friendsDialog(),
+    ...content.news.slides.map(announcementDialog),
+  ], [content]);
+  const backgroundDialogs = useMemo(() => content.rightTiles
+    .filter((tile) => tile.id !== "friends" && !content.dialogs[tile.id])
+    .map((tile) => dialogFor(tile.id, content)), [content]);
   const dialogPresets = useMemo(() => {
-    const feedPreview = feedDialog(
-      {
-        ...feeds.data,
-        items: feeds.data.items.slice(0, VISIBLE_FEED_ITEMS),
-        failures: (feeds.data.failures ?? []).slice(0, VISIBLE_FEED_FAILURES),
-      },
-      feeds.status,
-      feeds.isLive,
-      noopRetry,
-    );
+    const feedPreview = feedDialog({
+      ...feeds.data,
+      items: feeds.data.items.slice(0, VISIBLE_FEED_ITEMS),
+      failures: (feeds.data.failures ?? []).slice(0, VISIBLE_FEED_FAILURES),
+    }, feeds.status, feeds.isLive, noopRetry);
     return {
-      texts: [...Object.values(content.dialogs), friendsDialog(), feedPreview].map((dialogContent) =>
-        collectDialogText(dialogContent),
-      ),
+      texts: [...essentialDialogs, ...backgroundDialogs, feedPreview].map(collectDialogText),
       images: SITE_LINKS.map((link) => link.image),
     };
-  }, [content, feeds.data, feeds.isLive, feeds.status]);
+  }, [backgroundDialogs, essentialDialogs, feeds.data, feeds.isLive, feeds.status]);
   const music = useMusicPlayer(dialog === "music");
   const [announcement, setAnnouncement] = useState<NewsSlide | null>(null);
   const [profileOpen, setProfileOpen] = useState(false);
@@ -101,8 +116,12 @@ export default function App() {
   }, []);
   const openProfile = useCallback(() => setProfileOpen(true), []);
   const closeProfile = useCallback(() => setProfileOpen(false), []);
-  // 订阅内容与空闲期预栅格化必须取自同一份数据，快照缓存的 key 才会命中。
-  const feedContent = feedDialog(feeds.data, feeds.status, feeds.isLive, feeds.refresh);
+  const feedContent = useMemo(() => feedDialog(feeds.data, feeds.status, feeds.isLive, feeds.refresh), [feeds.data, feeds.status, feeds.isLive, feeds.refresh]);
+  const isFeedSettled = feeds.status === "error" || (feeds.status === "ready" && feeds.isLive) || feedWaitOver;
+  // 订阅未落定时启动页先等（有上限），避免把构建期快照当作真正的首屏准备结果。
+  const bootWarmContents = useMemo(() => isFeedSettled ? [...essentialDialogs, feedContent] : null, [essentialDialogs, feedContent, isFeedSettled]);
+  // 后台只补拍会随抓取更新的订阅弹窗；占位弹窗结构简单，首次打开现拍也赶得上入场窗口。
+  const idleWarmKey = `${feeds.data.generatedAt}:${feeds.status}:${viewport}:${pageEpoch}`;
   const dialogContent =
     announcement !== null
       ? announcementDialog(announcement)
@@ -119,7 +138,7 @@ export default function App() {
   const sceneRef = useRef<SceneApi | null>(null);
 
   const menuHeld = menu.phase === "exiting" || menu.phase === "closed";
-  const paused = menuHeld || dialog !== null || announcement !== null || profileOpen;
+  const paused = booting || menuHeld || dialog !== null || announcement !== null || profileOpen;
 
   useStageScale(stageRef, wallpaperRef, (s) => {
     if (sceneRef.current) sceneRef.current.stageScale.value = s;
@@ -133,42 +152,16 @@ export default function App() {
     else scene.resume();
   }, [paused]);
 
-  // the dialog transition needs an embedded-font stylesheet snapshot. Build it only after the entrance has
-  // settled and the menu is idle, so the one-off ~60ms task never lands inside the entrance animation.
-  // 首次访问时启动页已经把同一批预设跑完，这里的空闲预热只服务于跳过启动页的会话。
-  useEffect(() => {
-    if (menu.phase !== "open" || booting) return;
-    let timer = 0;
-    let idle = 0;
-    const warm = () => {
-      void warmDialogImages(dialogPresets.images);
-      void warmDialogSnapshot();
-      void warmDialogFonts(dialogPresets.texts);
-      void warmDialogRenderer();
-    };
-    const run = () => {
-      if (typeof window.requestIdleCallback !== "function") {
-        warm();
-        return;
-      }
-      idle = window.requestIdleCallback(warm, { timeout: 2000 });
-    };
-    timer = window.setTimeout(run, 500);
-    return () => {
-      window.clearTimeout(timer);
-      if (idle) window.cancelIdleCallback(idle);
-    };
-  }, [booting, dialogPresets, menu.phase]);
-
   const actions = useMemo(
     () => ({
       onAction: (action: string) => {
+        if (booting) return;
         setAnnouncement(null);
         setDialog(action);
       },
-      requestClose: () => menu.close(),
+      requestClose: () => { if (!booting) menu.close(); },
     }),
-    [menu],
+    [booting, menu],
   );
 
   // Escape: the dialog/panel owns its exit timeline; otherwise keep the demo's menu toggle.
@@ -199,9 +192,10 @@ export default function App() {
     <MenuActionsContext.Provider value={actions}>
       <SpriteDefs />
       <SiteIconDefs />
+      <DialogContourDefs />
       <Wallpaper ref={wallpaperRef} />
       <Countdown content={content.countdown} />
-      <div className="ef-overlay" id="efMenu" onClick={onOverlayClick}>
+      <div className="ef-overlay" id="efMenu" onClick={onOverlayClick} inert={booting}>
         <div className="ef-stage" ref={stageRef} data-paused={paused ? "true" : "false"}>
           <SceneProvider>
             <BackdropDecor />
@@ -241,7 +235,7 @@ export default function App() {
           <LegalFooter />
         </div>
       </div>
-      <button className="ef-closed-hint" id="efClosedHint" onClick={menu.open}>
+      <button className="ef-closed-hint" id="efClosedHint" onClick={menu.open} disabled={booting}>
         MENU CLOSED · 点击重新打开
       </button>
       <LegalFooter variant="fixed" />
@@ -249,7 +243,7 @@ export default function App() {
         <div className="ef-post__grade" />
       </div>
       {dialogContent && (
-        <InfoDialog content={dialogContent} onClose={closeDialog} />
+        <InfoDialog key={`${dialog ?? announcement?.title}:${viewport}:${pageEpoch}`} content={dialogContent} canAnimate={canAnimate} onClose={closeDialog} />
       )}
       {dialog === "music" && (
         <MusicDialog player={music} onClose={closeDialog} />
@@ -263,19 +257,15 @@ export default function App() {
           onClose={closeProfile}
         />
       )}
-      {!booting &&
-        menu.phase === "open" &&
-        feeds.status === "ready" &&
-        dialog === null &&
-        announcement === null &&
-        !profileOpen && (
-          // 订阅弹窗是这里最重的一份快照：抓取落定后在空闲期先栅格化，打开时才来得及播满入场。
-          <DialogRasterWarm content={feedContent} />
+      {canAnimate && !booting && menu.phase === "open" &&
+        dialog === null && announcement === null && !profileOpen && (
+          <DialogRasterWarm key={idleWarmKey} contents={[feedContent]} idle />
         )}
       {booting && (
         <BootScreen
           texts={dialogPresets.texts}
           images={dialogPresets.images}
+          contents={bootWarmContents}
           identity={bootIdentity}
           onDone={finishBoot}
         />

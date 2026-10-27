@@ -156,6 +156,8 @@ const CODE_LINES = [
 ];
 
 export type DialogPixelRenderer = {
+  setSource: (source: HTMLCanvasElement) => void;
+  isContextLost: () => boolean;
   draw: (phase: number) => void;
   destroy: () => void;
 };
@@ -163,45 +165,59 @@ export type DialogPixelRenderer = {
 function compileShader(gl: WebGL2RenderingContext, type: number, source: string): WebGLShader {
   const shader = gl.createShader(type);
   if (!shader) throw new Error("Pixel shader allocation failed");
-  gl.shaderSource(shader, source);
-  gl.compileShader(shader);
-  if (!gl.getShaderParameter(shader, gl.COMPILE_STATUS)) {
-    const message = gl.getShaderInfoLog(shader) ?? "Pixel shader compilation failed";
+  try {
+    gl.shaderSource(shader, source);
+    gl.compileShader(shader);
+    if (!gl.getShaderParameter(shader, gl.COMPILE_STATUS)) {
+      throw new Error(gl.getShaderInfoLog(shader) ?? "Pixel shader compilation failed");
+    }
+    return shader;
+  } catch (error) {
     gl.deleteShader(shader);
-    throw new Error(message);
+    throw error;
   }
-  return shader;
 }
 
 function createProgram(gl: WebGL2RenderingContext): WebGLProgram {
   const vertex = compileShader(gl, gl.VERTEX_SHADER, VERTEX_SHADER);
-  const fragment = compileShader(gl, gl.FRAGMENT_SHADER, FRAGMENT_SHADER);
-  const program = gl.createProgram();
-  if (!program) throw new Error("Pixel program allocation failed");
-  gl.attachShader(program, vertex);
-  gl.attachShader(program, fragment);
-  gl.bindAttribLocation(program, 0, "p");
-  gl.linkProgram(program);
-  gl.deleteShader(vertex);
-  gl.deleteShader(fragment);
-  if (!gl.getProgramParameter(program, gl.LINK_STATUS)) {
-    const message = gl.getProgramInfoLog(program) ?? "Pixel program linking failed";
-    gl.deleteProgram(program);
-    throw new Error(message);
+  let fragment: WebGLShader | null = null;
+  let program: WebGLProgram | null = null;
+  try {
+    fragment = compileShader(gl, gl.FRAGMENT_SHADER, FRAGMENT_SHADER);
+    program = gl.createProgram();
+    if (!program) throw new Error("Pixel program allocation failed");
+    gl.attachShader(program, vertex);
+    gl.attachShader(program, fragment);
+    gl.bindAttribLocation(program, 0, "p");
+    gl.linkProgram(program);
+    if (!gl.getProgramParameter(program, gl.LINK_STATUS)) {
+      throw new Error(gl.getProgramInfoLog(program) ?? "Pixel program linking failed");
+    }
+    return program;
+  } catch (error) {
+    if (program) gl.deleteProgram(program);
+    throw error;
+  } finally {
+    gl.deleteShader(vertex);
+    if (fragment) gl.deleteShader(fragment);
   }
-  return program;
 }
 
 function createTexture(gl: WebGL2RenderingContext, unit: number): WebGLTexture {
   const texture = gl.createTexture();
   if (!texture) throw new Error("Pixel texture allocation failed");
-  gl.activeTexture(gl.TEXTURE0 + unit);
-  gl.bindTexture(gl.TEXTURE_2D, texture);
-  gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR);
-  gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.LINEAR);
-  gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE);
-  gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
-  return texture;
+  try {
+    gl.activeTexture(gl.TEXTURE0 + unit);
+    gl.bindTexture(gl.TEXTURE_2D, texture);
+    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR);
+    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.LINEAR);
+    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE);
+    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
+    return texture;
+  } catch (error) {
+    gl.deleteTexture(texture);
+    throw error;
+  }
 }
 
 function uploadCodeAtlas(gl: WebGL2RenderingContext, program: WebGLProgram): void {
@@ -250,62 +266,159 @@ export function createDialogPixelRenderer(
     powerPreference: "low-power",
   });
   if (!gl) throw new Error("WebGL 2 is unavailable");
-  canvas.width = source.width;
-  canvas.height = source.height;
-  const program = createProgram(gl);
-  gl.useProgram(program);
-  const vao = gl.createVertexArray();
-  const buffer = gl.createBuffer();
-  const sourceTexture = createTexture(gl, 0);
-  const atlasTexture = createTexture(gl, 1);
-  if (!vao || !buffer) throw new Error("Pixel geometry allocation failed");
-  gl.bindVertexArray(vao);
-  gl.bindBuffer(gl.ARRAY_BUFFER, buffer);
-  gl.bufferData(gl.ARRAY_BUFFER, new Float32Array([-1, -1, 1, -1, -1, 1, 1, 1]), gl.STATIC_DRAW);
-  gl.enableVertexAttribArray(0);
-  gl.vertexAttribPointer(0, 2, gl.FLOAT, false, 0, 0);
-  gl.disable(gl.DEPTH_TEST);
-  gl.disable(gl.BLEND);
-  gl.activeTexture(gl.TEXTURE0);
-  gl.bindTexture(gl.TEXTURE_2D, sourceTexture);
-  gl.pixelStorei(gl.UNPACK_FLIP_Y_WEBGL, true);
-  gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, gl.RGBA, gl.UNSIGNED_BYTE, source);
-  gl.activeTexture(gl.TEXTURE1);
-  gl.bindTexture(gl.TEXTURE_2D, atlasTexture);
-  gl.pixelStorei(gl.UNPACK_ALIGNMENT, 1);
-  uploadCodeAtlas(gl, program);
-  gl.uniform1i(gl.getUniformLocation(program, "source"), 0);
-  gl.uniform1i(gl.getUniformLocation(program, "codeAtlas"), 1);
-  gl.uniform2f(gl.getUniformLocation(program, "sceneSize"), source.width, source.height);
-  gl.uniform1f(gl.getUniformLocation(program, "beatCount"), PIXEL_TRANSITION_BEATS);
+  let program: WebGLProgram | null = null;
+  let vao: WebGLVertexArrayObject | null = null;
+  let buffer: WebGLBuffer | null = null;
+  let sourceTexture: WebGLTexture | null = null;
+  let atlasTexture: WebGLTexture | null = null;
+  let currentSource: HTMLCanvasElement | null = null;
+  let isDestroyed = false;
+  const destroy = () => {
+    if (isDestroyed) return;
+    isDestroyed = true;
+    currentSource = null;
+    if (sourceTexture) gl.deleteTexture(sourceTexture);
+    if (atlasTexture) gl.deleteTexture(atlasTexture);
+    if (buffer) gl.deleteBuffer(buffer);
+    if (vao) gl.deleteVertexArray(vao);
+    if (program) gl.deleteProgram(program);
+    // 浏览器对同时存在的 WebGL 上下文有上限，反复开关弹窗必须显式归还。
+    gl.getExtension("WEBGL_lose_context")?.loseContext();
+  };
+  try {
+    program = createProgram(gl);
+    gl.useProgram(program);
+    vao = gl.createVertexArray();
+    buffer = gl.createBuffer();
+    if (!vao || !buffer) throw new Error("Pixel geometry allocation failed");
+    sourceTexture = createTexture(gl, 0);
+    atlasTexture = createTexture(gl, 1);
+    gl.bindVertexArray(vao);
+    gl.bindBuffer(gl.ARRAY_BUFFER, buffer);
+    gl.bufferData(gl.ARRAY_BUFFER, new Float32Array([-1, -1, 1, -1, -1, 1, 1, 1]), gl.STATIC_DRAW);
+    gl.enableVertexAttribArray(0);
+    gl.vertexAttribPointer(0, 2, gl.FLOAT, false, 0, 0);
+    gl.disable(gl.DEPTH_TEST);
+    gl.disable(gl.BLEND);
+    gl.activeTexture(gl.TEXTURE1);
+    gl.bindTexture(gl.TEXTURE_2D, atlasTexture);
+    gl.pixelStorei(gl.UNPACK_ALIGNMENT, 1);
+    uploadCodeAtlas(gl, program);
+    gl.uniform1i(gl.getUniformLocation(program, "source"), 0);
+    gl.uniform1i(gl.getUniformLocation(program, "codeAtlas"), 1);
+    gl.uniform1f(gl.getUniformLocation(program, "beatCount"), PIXEL_TRANSITION_BEATS);
+    const sceneSize = gl.getUniformLocation(program, "sceneSize");
+    const exitStrength = gl.getUniformLocation(program, "exitStrength");
+    const exitPhase = gl.getUniformLocation(program, "exitPhase");
+    const setSource = (nextSource: HTMLCanvasElement) => {
+      if (isDestroyed || gl.isContextLost()) throw new Error("Pixel context is unavailable");
+      if (currentSource === nextSource) return;
+      if (canvas.width !== nextSource.width) canvas.width = nextSource.width;
+      if (canvas.height !== nextSource.height) canvas.height = nextSource.height;
+      gl.activeTexture(gl.TEXTURE0);
+      gl.bindTexture(gl.TEXTURE_2D, sourceTexture);
+      gl.pixelStorei(gl.UNPACK_FLIP_Y_WEBGL, true);
+      gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, gl.RGBA, gl.UNSIGNED_BYTE, nextSource);
+      gl.uniform2f(sceneSize, nextSource.width, nextSource.height);
+      currentSource = nextSource;
+    };
+    setSource(source);
+    return {
+      setSource,
+      isContextLost: () => gl.isContextLost(),
+      draw(phase) {
+        if (isDestroyed || gl.isContextLost()) return;
+        const state = transitionState(phase);
+        gl.viewport(0, 0, canvas.width, canvas.height);
+        gl.uniform1f(exitStrength, state.strength);
+        gl.uniform1f(exitPhase, state.phase);
+        gl.drawArrays(gl.TRIANGLE_STRIP, 0, 4);
+      },
+      destroy,
+    };
+  } catch (error) {
+    destroy();
+    throw error;
+  }
+}
 
+type RendererPipeline = { canvas: HTMLCanvasElement; renderer: DialogPixelRenderer; lease: symbol | null };
+let sharedPipeline: RendererPipeline | null = null;
+let rendererWarmPromise: Promise<void> | null = null;
+let hasPagehideListener = false;
+let pageGeneration = 0;
+
+function destroySharedPipeline(): void {
+  const pipeline = sharedPipeline;
+  sharedPipeline = null;
+  rendererWarmPromise = null;
+  if (pipeline) {
+    pipeline.lease = null;
+    pipeline.canvas.remove();
+    pipeline.renderer.destroy();
+  }
+}
+
+function watchPagehide(): void {
+  if (hasPagehideListener) return;
+  hasPagehideListener = true;
+  window.addEventListener("pagehide", () => {
+    pageGeneration += 1;
+    destroySharedPipeline();
+  });
+}
+
+function getRendererPipeline(source: HTMLCanvasElement): RendererPipeline {
+  watchPagehide();
+  if (sharedPipeline?.renderer.isContextLost()) destroySharedPipeline();
+  if (!sharedPipeline) {
+    const canvas = document.createElement("canvas");
+    canvas.style.display = "block";
+    canvas.style.width = "100%";
+    canvas.style.height = "100%";
+    canvas.setAttribute("aria-hidden", "true");
+    const renderer = createDialogPixelRenderer(canvas, source);
+    sharedPipeline = { canvas, renderer, lease: null };
+  } else {
+    try {
+      sharedPipeline.renderer.setSource(source);
+    } catch (error) {
+      destroySharedPipeline();
+      throw error;
+    }
+  }
+  return sharedPipeline;
+}
+
+/** 租约只借出唯一管线；旧弹窗的异步收尾不能拆掉后来弹窗的画布或改写其相位。 */
+export function acquireDialogPixelRenderer(
+  host: HTMLElement,
+  source: HTMLCanvasElement,
+): { draw: (phase: number) => void; release: () => void } {
+  const pipeline = getRendererPipeline(source);
+  const lease = Symbol("dialog renderer lease");
+  pipeline.lease = lease;
+  host.appendChild(pipeline.canvas);
   return {
     draw(phase) {
-      const state = transitionState(phase);
-      gl.viewport(0, 0, canvas.width, canvas.height);
-      gl.uniform1f(gl.getUniformLocation(program, "exitStrength"), state.strength);
-      gl.uniform1f(gl.getUniformLocation(program, "exitPhase"), state.phase);
-      gl.drawArrays(gl.TRIANGLE_STRIP, 0, 4);
+      if (sharedPipeline === pipeline && pipeline.lease === lease) pipeline.renderer.draw(phase);
     },
-    destroy() {
-      gl.deleteTexture(sourceTexture);
-      gl.deleteTexture(atlasTexture);
-      gl.deleteBuffer(buffer);
-      gl.deleteVertexArray(vao);
-      gl.deleteProgram(program);
-      // 浏览器对同时存在的 WebGL 上下文有上限，反复开关弹窗必须显式归还。
-      gl.getExtension("WEBGL_lose_context")?.loseContext();
+    release() {
+      if (sharedPipeline !== pipeline || pipeline.lease !== lease) return;
+      pipeline.lease = null;
+      pipeline.canvas.remove();
     },
   };
 }
 
-const imageCache = new Map<string, Promise<string | null>>();
+const imageCache = new Map<string, Promise<string>>();
 const SNAPSHOT_IMAGE_MAX_WIDTH = 1280;
 
 /** 封面只用于 400ms 转场，按 2x 展示宽度重编码，避免把原图整份塞进 SVG 拖慢首次解码。 */
 async function shrinkImage(bytes: Uint8Array, type: string): Promise<string> {
+  let bitmap: ImageBitmap | null = null;
   try {
-    const bitmap = await createImageBitmap(new Blob([bytes.slice().buffer], { type }));
+    bitmap = await createImageBitmap(new Blob([bytes.slice().buffer], { type }));
     const scale = Math.min(1, SNAPSHOT_IMAGE_MAX_WIDTH / bitmap.width);
     const canvas = document.createElement("canvas");
     canvas.width = Math.max(1, Math.round(bitmap.width * scale));
@@ -314,27 +427,39 @@ async function shrinkImage(bytes: Uint8Array, type: string): Promise<string> {
     if (!context) return bytesToDataUrl(bytes, type);
     context.imageSmoothingQuality = "high";
     context.drawImage(bitmap, 0, 0, canvas.width, canvas.height);
-    bitmap.close();
     return canvas.toDataURL("image/webp", 0.86);
   } catch {
-    return bytesToDataUrl(bytes, type);
+    // 某些格式不能转 ImageBitmap，但可由 img 异步解码；坏图仍须向预热调用方报错。
+    const dataUrl = bytesToDataUrl(bytes, type);
+    const image = new Image();
+    image.decoding = "async";
+    image.src = dataUrl;
+    await image.decode();
+    return dataUrl;
+  } finally {
+    bitmap?.close();
   }
 }
 
-function cacheImage(url: string): Promise<string | null> {
+async function fetchResource(url: string): Promise<Response> {
+  const response = await fetch(url, { signal: AbortSignal.timeout(6000) });
+  if (!response.ok) throw new Error(`Dialog resource HTTP ${response.status}: ${url}`);
+  return response;
+}
+
+function cacheImage(url: string): Promise<string> {
   const absolute = new URL(url, window.location.href).href;
   let pending = imageCache.get(absolute);
   if (!pending) {
     pending = (async () => {
-      try {
-        const response = await fetch(absolute);
-        const bytes = new Uint8Array(await response.arrayBuffer());
-        return await shrinkImage(bytes, response.headers.get("content-type") ?? "image/webp");
-      } catch {
-        return null;
-      }
+      const response = await fetchResource(absolute);
+      const bytes = new Uint8Array(await response.arrayBuffer());
+      return shrinkImage(bytes, response.headers.get("content-type") ?? "image/webp");
     })();
     imageCache.set(absolute, pending);
+    void pending.catch(() => {
+      if (imageCache.get(absolute) === pending) imageCache.delete(absolute);
+    });
   }
   return pending;
 }
@@ -379,6 +504,23 @@ function parseUnicodeRange(value: string): [number, number][] | null {
   return ranges.length > 0 ? ranges : null;
 }
 
+/** 快照只嵌入可能作用于弹窗的规则：整站组件样式（约 200KB）每张图都带一份会拖慢 SVG 解码。 */
+function snapshotRule(rule: CSSRule): string {
+  if (rule instanceof CSSStyleRule) {
+    return /(^|,)\s*(:root|html|body|\*|button)\b/.test(rule.selectorText) || rule.selectorText.includes(".ef-idlg")
+      ? rule.cssText
+      : "";
+  }
+  if (typeof CSSMediaRule !== "undefined" && rule instanceof CSSMediaRule) {
+    const inner = Array.from(rule.cssRules, snapshotRule).filter(Boolean).join("\n");
+    return inner ? `@media ${rule.conditionText} {${inner}}` : "";
+  }
+  if (typeof CSSKeyframesRule !== "undefined" && rule instanceof CSSKeyframesRule) {
+    return rule.name.includes("efIdlg") ? rule.cssText : "";
+  }
+  return rule.cssText.includes("--ef-idlg") ? rule.cssText : "";
+}
+
 function buildCssIndex(): CssIndex {
   let base = "";
   const faces: FontFaceEntry[] = [];
@@ -391,18 +533,19 @@ function buildCssIndex(): CssIndex {
     }
     for (const rule of Array.from(rules)) {
       if (!(rule instanceof CSSFontFaceRule)) {
-        base += `${rule.cssText}\n`;
+        const cssText = snapshotRule(rule);
+        if (cssText) base += `${cssText}\n`;
         continue;
       }
       const family = rule.style.getPropertyValue("font-family").replace(/["']/g, "").trim();
       if (!DIALOG_FONT_FAMILIES.has(family)) continue;
-      const urls = Array.from(rule.cssText.matchAll(CSS_URL), (match) => {
-        const path = match[2];
-        return path ? new URL(path, window.location.href).href : "";
-      });
+      const cssText = rule.cssText.replace(CSS_URL, (_source, _quote: string, path: string) =>
+        `url("${new URL(path, sheet.href ?? window.location.href).href}")`,
+      );
+      const urls = Array.from(cssText.matchAll(CSS_URL), (match) => match[2] ?? "");
       if (urls.length === 0 || urls.some((url) => !url)) continue;
       faces.push({
-        cssText: rule.cssText,
+        cssText,
         urls,
         ranges: parseUnicodeRange(rule.style.getPropertyValue("unicode-range")),
       });
@@ -412,27 +555,33 @@ function buildCssIndex(): CssIndex {
 }
 
 let cssIndexPromise: Promise<CssIndex> | null = null;
-const fontDataCache = new Map<string, Promise<string | null>>();
+const fontDataCache = new Map<string, Promise<string>>();
 const dialogCssCache = new Map<string, Promise<string>>();
+const DIALOG_CSS_CACHE_LIMIT = 8;
 
 function getCssIndex(): Promise<CssIndex> {
-  cssIndexPromise ??= Promise.resolve().then(buildCssIndex);
+  if (!cssIndexPromise) {
+    const pending = Promise.resolve().then(buildCssIndex);
+    cssIndexPromise = pending;
+    void pending.catch(() => {
+      if (cssIndexPromise === pending) cssIndexPromise = null;
+    });
+  }
   return cssIndexPromise;
 }
 
-function getFontData(url: string): Promise<string | null> {
+function getFontData(url: string): Promise<string> {
   let pending = fontDataCache.get(url);
   if (!pending) {
     pending = (async () => {
-      try {
-        const response = await fetch(url);
-        const bytes = new Uint8Array(await response.arrayBuffer());
-        return bytesToDataUrl(bytes, "font/woff2");
-      } catch {
-        return null;
-      }
+      const response = await fetchResource(url);
+      const bytes = new Uint8Array(await response.arrayBuffer());
+      return bytesToDataUrl(bytes, "font/woff2");
     })();
     fontDataCache.set(url, pending);
+    void pending.catch(() => {
+      if (fontDataCache.get(url) === pending) fontDataCache.delete(url);
+    });
   }
   return pending;
 }
@@ -491,8 +640,10 @@ function visibleTextOf(source: HTMLElement): string {
 }
 
 async function getDialogCss(text: string): Promise<string> {
+  const baseUrl = window.location.href;
   const { base, faces } = await getCssIndex();
-  const selected = faces.filter((face) => fontCoversText(face, codePointsOf(text)));
+  const codePoints = codePointsOf(text);
+  const selected = faces.filter((face) => fontCoversText(face, codePoints));
   const urls = Array.from(new Set(selected.flatMap((face) => face.urls))).sort();
   const key = urls.join("|");
   let pending = dialogCssCache.get(key);
@@ -501,15 +652,24 @@ async function getDialogCss(text: string): Promise<string> {
       const embedded = new Map(await Promise.all(urls.map(async (url) => [url, await getFontData(url)] as const)));
       let css = base;
       for (const face of selected) {
-        if (face.urls.some((url) => !embedded.get(url))) continue;
         css += `${face.cssText.replace(CSS_URL, (source, _quote: string, path: string) => {
-          const dataUrl = embedded.get(new URL(path, window.location.href).href);
+          const dataUrl = embedded.get(new URL(path, baseUrl).href);
           return dataUrl ? `url("${dataUrl}")` : source;
         })}\n`;
       }
       return css;
     })();
-    dialogCssCache.set(key, pending);
+    void pending.catch(() => {
+      if (dialogCssCache.get(key) === pending) dialogCssCache.delete(key);
+    });
+  }
+  // LRU 只保存有限种内嵌样式组合；字体字节本身仍按 URL 复用。
+  dialogCssCache.delete(key);
+  dialogCssCache.set(key, pending);
+  while (dialogCssCache.size > DIALOG_CSS_CACHE_LIMIT) {
+    const oldest = dialogCssCache.keys().next().value;
+    if (oldest === undefined) break;
+    dialogCssCache.delete(oldest);
   }
   return pending;
 }
@@ -524,11 +684,11 @@ export function warmDialogSnapshot(): Promise<void> {
 export function warmDialogFonts(texts: string[]): Promise<void> {
   const text = texts.join("");
   return (async () => {
-    await Promise.all(
-      Array.from(DIALOG_FONT_FAMILIES, (family) =>
-        document.fonts.load(`16px "${family}"`, text).catch(() => []),
-      ),
-    );
+    await Promise.all([
+      document.fonts.load('700 16px "Rajdhani"', text),
+      ...[400, 600, 700, 900].map((weight) => document.fonts.load(`${weight} 16px "Noto Sans SC"`, text)),
+      ...[400, 700].map((weight) => document.fonts.load(`${weight} 16px "JetBrains Mono"`, text)),
+    ]);
     const { faces } = await getCssIndex();
     const codePoints = codePointsOf(text);
     const urls = new Set<string>();
@@ -541,60 +701,125 @@ export function warmDialogFonts(texts: string[]): Promise<void> {
   })();
 }
 
-/** 预热 WebGL 管线：一次性上下文里编译同一套着色器并跑一帧，摊掉首次打开时的同步编译与上下文初始化。 */
+/** 预热并保留真正借给弹窗的 WebGL 管线，摊掉首次打开时的同步编译与上下文初始化。 */
 export function warmDialogRenderer(): Promise<void> {
-  return Promise.resolve().then(() => {
+  watchPagehide();
+  if (sharedPipeline?.renderer.isContextLost()) destroySharedPipeline();
+  if (rendererWarmPromise) return rendererWarmPromise;
+  const generation = pageGeneration;
+  const pending = Promise.resolve().then(() => {
+    if (generation !== pageGeneration) throw new Error("Dialog renderer warm cancelled by pagehide");
+    if (sharedPipeline) return;
     const source = document.createElement("canvas");
     source.width = 16;
     source.height = 16;
     const context = source.getContext("2d");
-    if (!context) return;
+    if (!context) throw new Error("Pixel warm source preparation failed");
     context.fillStyle = "#e7e7e2";
     context.fillRect(0, 0, 16, 16);
-    const canvas = document.createElement("canvas");
     try {
-      const renderer = createDialogPixelRenderer(canvas, source);
-      renderer.draw(0.5);
-      renderer.destroy();
-    } catch {
-      // 无 WebGL2 的环境打开弹窗时本就走静态面板，预热失败无需处理。
+      getRendererPipeline(source).renderer.draw(0.5);
+    } catch (error) {
+      destroySharedPipeline();
+      throw error;
     }
   });
+  rendererWarmPromise = pending;
+  void pending.catch(() => {
+    if (rendererWarmPromise === pending) rendererWarmPromise = null;
+  });
+  return pending;
+}
+
+function copySnapshotInheritance(source: HTMLElement, clone: HTMLElement): void {
+  const style = window.getComputedStyle(source);
+  for (const name of Array.from(style)) {
+    if (name.startsWith("--")) clone.style.setProperty(name, style.getPropertyValue(name));
+  }
+  for (const name of ["font-family", "font-size", "font-weight", "font-style", "line-height", "color", "direction"]) {
+    clone.style.setProperty(name, style.getPropertyValue(name));
+  }
+}
+
+/** 等高线的 use 引用在卡片外；把缺失的定义移入脱离文档的快照，而不是依赖原页面。 */
+function copySnapshotDefinitions(source: HTMLElement, clone: HTMLElement): void {
+  const ids = new Set(Array.from(clone.querySelectorAll("[id]"), (element) => element.id));
+  const uses = Array.from(clone.querySelectorAll("use"));
+  for (const use of uses) {
+    const href = use.getAttribute("href") ?? use.getAttributeNS("http://www.w3.org/1999/xlink", "href");
+    if (!href?.startsWith("#") || ids.has(href.slice(1))) continue;
+    const definition = source.ownerDocument.getElementById(href.slice(1));
+    const svg = use.ownerSVGElement;
+    if (!definition || !svg) continue;
+    const copied = definition.cloneNode(true) as Element;
+    const defs = document.createElementNS("http://www.w3.org/2000/svg", "defs");
+    defs.appendChild(copied);
+    svg.insertBefore(defs, svg.firstChild);
+    ids.add(definition.id);
+    for (const element of copied.querySelectorAll("[id]")) ids.add(element.id);
+    uses.push(...copied.querySelectorAll("use"));
+  }
 }
 
 export async function rasterizeDialog(sourceElement: HTMLElement): Promise<HTMLCanvasElement> {
   await document.fonts.ready;
+  const decodingImages = Array.from(sourceElement.querySelectorAll("img"));
+  const decodingUrls = decodingImages.map((image) => image.currentSrc || image.src);
+  await Promise.all(decodingImages.map((image, index) => decodingUrls[index] ? image.decode() : undefined));
+
+  // 从连接性检查到所有几何、文本、资源地址与继承样式的采集之间不让出执行权。
+  // 后续 await 只访问这份离线快照，卸载、换内容或改变 DPR 都不能拼出两代混合画面。
+  if (!sourceElement.isConnected) throw new Error("Dialog snapshot source is detached; a connected element is required");
   const width = sourceElement.offsetWidth;
   const height = sourceElement.offsetHeight;
+  if (width <= 0 || height <= 0) throw new Error("Dialog snapshot source has zero dimensions");
   // 快照 SVG 的视口必须等于真实视口，vw/vh 与媒体查询才会和落位后的 DOM 算出同一套字号。
   const viewportWidth = Math.max(1, window.innerWidth);
   const viewportHeight = Math.max(1, window.innerHeight);
+  const ratio = Math.min(2, window.devicePixelRatio || 1);
   const clone = sourceElement.cloneNode(true) as HTMLElement;
+  const visibleText = visibleTextOf(sourceElement);
+  const sourceImages = Array.from(sourceElement.querySelectorAll("img"));
+  const imageUrls = sourceImages.map((image) => image.currentSrc || image.src);
+  if (sourceImages.length !== decodingImages.length || sourceImages.some((image, index) =>
+    image !== decodingImages[index] || imageUrls[index] !== decodingUrls[index],
+  )) throw new Error("Dialog snapshot images changed during decode");
+  copySnapshotInheritance(sourceElement, clone);
+  copySnapshotDefinitions(sourceElement, clone);
   clone.style.opacity = "1";
   clone.style.visibility = "visible";
   clone.style.margin = "0";
-  const sourceImages = Array.from(sourceElement.querySelectorAll("img"));
-  const cloneImages = Array.from(clone.querySelectorAll("img"));
-  await Promise.all(sourceImages.map(async (image, index) => {
-    const sourceUrl = image.currentSrc || image.src;
-    const dataUrl = sourceUrl ? await cacheImage(sourceUrl) : null;
-    const cloned = cloneImages[index];
-    if (dataUrl && cloned) cloned.src = dataUrl;
-  }));
   clone.querySelectorAll("canvas").forEach((canvas) => canvas.remove());
-  const css = await getDialogCss(visibleTextOf(sourceElement));
+
+  const cloneImages = Array.from(clone.querySelectorAll("img"));
+  const [css] = await Promise.all([
+    getDialogCss(visibleText),
+    Promise.all(imageUrls.map(async (url, index) => {
+      const dataUrl = url ? await cacheImage(url) : null;
+      const image = cloneImages[index];
+      if (dataUrl && image) {
+        image.removeAttribute("srcset");
+        image.removeAttribute("sizes");
+        image.setAttribute("loading", "eager");
+        image.src = dataUrl;
+      }
+    })),
+  ]);
   const serialized = new XMLSerializer().serializeToString(clone);
-  const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="${viewportWidth}" height="${viewportHeight}"><foreignObject width="100%" height="100%"><style><![CDATA[${css}]]></style><div xmlns="http://www.w3.org/1999/xhtml" style="position:absolute;left:0;top:0;width:${width}px;height:${height}px">${serialized}</div></foreignObject></svg>`;
+  // viewBox 扩大采样区而不扩大 CSS 视口；完整 foreignObject 避免未缩放卡片宽于视口时裁边。
+  const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="${viewportWidth}" height="${viewportHeight}" viewBox="0 0 ${width} ${height}" preserveAspectRatio="none"><foreignObject width="${width}" height="${height}"><style><![CDATA[${css}]]></style><div xmlns="http://www.w3.org/1999/xhtml" style="position:absolute;left:0;top:0;width:${width}px;height:${height}px">${serialized}</div></foreignObject></svg>`;
   const image = new Image();
+  image.decoding = "async";
   image.src = `data:image/svg+xml;charset=utf-8,${encodeURIComponent(svg)}`;
   await image.decode();
-  const ratio = Math.min(2, window.devicePixelRatio || 1);
   const canvas = document.createElement("canvas");
   canvas.width = Math.max(1, Math.round(width * ratio));
   canvas.height = Math.max(1, Math.round(height * ratio));
   const context = canvas.getContext("2d");
   if (!context) throw new Error("Dialog rasterization is unavailable");
   context.scale(ratio, ratio);
-  context.drawImage(image, 0, 0, width, height, 0, 0, width, height);
+  // SVG 视口是 window 尺寸，viewBox 是完整卡片：必须取整张 SVG 再映射回卡片，
+  // 只取左上 width×height 会裁掉卡片其余部分（窄视口与桌面高视口都会触发）。
+  context.drawImage(image, 0, 0, viewportWidth, viewportHeight, 0, 0, width, height);
   return canvas;
 }

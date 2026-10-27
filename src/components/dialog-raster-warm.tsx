@@ -1,68 +1,90 @@
-import { useEffect, useRef } from "react";
+import { memo, useEffect, useRef, useState } from "react";
 import type { CSSProperties } from "react";
 import type { DialogContent } from "../config/menu-content";
 import { rasterizeDialog } from "../scene/dialog-pixel-renderer";
-import {
-  dialogCardHeight,
-  dialogIsNarrow,
-  dialogPanelHeight,
-  dialogRasterKey,
-  peekDialogRaster,
-  rememberDialogRaster,
-} from "../scene/dialog-raster-cache";
-import { DialogContourDefs, DialogFace } from "./info-dialog";
+import { dialogCardHeight, dialogIsNarrow, dialogPanelHeight, dialogRasterKey, getDialogRaster } from "../scene/dialog-raster-cache";
+import { DialogFace } from "./info-dialog";
 
-/* 空闲期把弹窗快照预先栅格化好：像素入场只有 400ms，而文字量大的弹窗（订阅）现做快照要
-   几百毫秒，永远来不及接入。这里渲染一份与弹窗同尺寸的同款结构，在浏览器空闲时跑一次
-   rasterizeDialog 存进缓存，真正打开时直接取用。inert + 移出视口，不参与交互与无障碍树。 */
+export type DialogWarmProgress = { completed: number; total: number; errors: string[] };
 
-export function DialogRasterWarm({ content }: { content: DialogContent }) {
+/** 菜单空闲预热延迟：避开启动退场与用户刚进入菜单的首次点击。 */
+const IDLE_WARM_DELAY_MS = 1800;
+
+/* 逐份栅格化真实弹窗画面：启动页要求全部完成后退出；菜单空闲时只为尚未命中的弹窗补拍。 */
+export const DialogRasterWarm = memo(function DialogRasterWarm({ contents, idle = false, onProgress }: {
+  contents: readonly DialogContent[];
+  idle?: boolean;
+  onProgress?: (progress: DialogWarmProgress) => void;
+}) {
+  // 预热输入在挂载时定格：启动页期间抓取更新不能打乱正在逐份栅格化的队列。
+  const [frozenContents] = useState(contents);
+  const [index, setIndex] = useState(0);
   const shapeRef = useRef<HTMLDivElement>(null);
-  const cardHeight = dialogCardHeight(content);
+  const errorsRef = useRef<string[]>([]);
+  const startedRef = useRef(!idle);
+  const content = frozenContents[index];
+  const cardHeight = content ? dialogCardHeight(content) : 0;
   const panelHeight = dialogPanelHeight(cardHeight);
   const isNarrow = dialogIsNarrow();
-  const key = dialogRasterKey(content, cardHeight);
+  const key = content ? dialogRasterKey(content, cardHeight) : "";
 
   useEffect(() => {
-    if (peekDialogRaster(key) !== null) return;
-    let idle = 0;
+    if (!content) return;
+    let cancelled = false;
+    let idleHandle = 0;
     let timer = 0;
-    const warm = () => {
+    const run = () => {
       const shape = shapeRef.current;
-      if (shape === null) return;
-      rememberDialogRaster(key, rasterizeDialog(shape));
+      if (!shape || cancelled) return;
+      void getDialogRaster(key, () => rasterizeDialog(shape)).catch((error: unknown) => {
+        console.warn("Dialog raster preparation failed", content.subtitle, error);
+        if (!cancelled) errorsRef.current.push(content.subtitle);
+      }).then(() => {
+        if (cancelled) return;
+        onProgress?.({ completed: index + 1, total: frozenContents.length, errors: [...errorsRef.current] });
+        setIndex(index + 1);
+      });
     };
-    const schedule = () => {
-      if (typeof window.requestIdleCallback === "function") {
-        idle = window.requestIdleCallback(warm, { timeout: 3000 });
-      } else {
-        timer = window.setTimeout(warm, 300);
+    const frame = requestAnimationFrame(() => {
+      if (!idle || startedRef.current) {
+        if (idle && typeof window.requestIdleCallback === "function") {
+          idleHandle = window.requestIdleCallback(run, { timeout: 3000 });
+        } else {
+          timer = window.setTimeout(run, idle ? 300 : 0);
+        }
+        return;
       }
-    };
-    // 字体与布局落位后再拍，栅格化出来的才是最终画面。
-    const raf = requestAnimationFrame(schedule);
+      timer = window.setTimeout(() => {
+        timer = 0;
+        startedRef.current = true;
+        if (typeof window.requestIdleCallback === "function") {
+          idleHandle = window.requestIdleCallback(run, { timeout: 3000 });
+        } else {
+          timer = window.setTimeout(run, 300);
+        }
+      }, IDLE_WARM_DELAY_MS);
+    });
     return () => {
-      cancelAnimationFrame(raf);
+      cancelled = true;
+      cancelAnimationFrame(frame);
       window.clearTimeout(timer);
-      if (idle) window.cancelIdleCallback(idle);
+      if (idleHandle) window.cancelIdleCallback(idleHandle);
     };
-  }, [key]);
+  }, [content, frozenContents.length, idle, index, key, onProgress]);
 
+  if (!content) return null;
   return (
-    <>
-      <DialogContourDefs />
-      <div className="ef-idlg ef-idlg--warm" data-phase="open" style={{ "--ef-idlg-shadow": "1" } as CSSProperties} inert aria-hidden="true">
-        <div className="ef-idlg__frame">
-          <div className="ef-idlg__panel" style={isNarrow ? undefined : { height: panelHeight }}>
-            <div className="ef-idlg__card" style={isNarrow ? undefined : { height: cardHeight }}>
-              <div className="ef-idlg__shape" ref={shapeRef}>
-                <div className="ef-idlg__rim" aria-hidden="true" />
-                <DialogFace content={content} />
-              </div>
+    <div className="ef-idlg ef-idlg--warm" data-phase="open" style={{ "--ef-idlg-shadow": "1" } as CSSProperties} inert aria-hidden="true">
+      <div className="ef-idlg__frame">
+        <div className="ef-idlg__panel" style={isNarrow ? undefined : { height: panelHeight }}>
+          <div className="ef-idlg__card" style={isNarrow ? undefined : { height: cardHeight }}>
+            <div className="ef-idlg__shape" ref={shapeRef}>
+              <div className="ef-idlg__rim" aria-hidden="true" />
+              <DialogFace content={content} />
             </div>
           </div>
         </div>
       </div>
-    </>
+    </div>
   );
-}
+});
