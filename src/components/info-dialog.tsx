@@ -1,7 +1,7 @@
-import { useCallback, useEffect, useId, useLayoutEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useLayoutEffect, useRef, useState } from "react";
 import { gsap } from "gsap";
 import { createTopoContourPaths } from "../lib/topo-contours";
-import type { DialogContent } from "../config/menu-content";
+import type { DialogContent, DialogGroupItem } from "../config/menu-content";
 import { TechStackIcon } from "./tech-stack-icon";
 import { acquireDialogPixelRenderer, rasterizeDialog } from "../scene/dialog-pixel-renderer";
 import {
@@ -22,6 +22,14 @@ const CONTOUR_PATHS = createTopoContourPaths({
   levels: 14,
   seed: 20261024,
 });
+/** 黑条专用的稀疏等高线：线条更少、更粗更亮，横条上也看得清。 */
+const BAR_CONTOUR_PATHS = createTopoContourPaths({
+  width: 780,
+  height: 64,
+  step: 24,
+  levels: 10,
+  seed: 20261030,
+});
 
 /** 入场起播前最多等快照的时间：超过就照常开跑，避免慢快照把弹窗拖成"点了没反应"。 */
 const ENTRANCE_GRACE_MS = 450;
@@ -38,73 +46,187 @@ export function DialogContourDefs() {
             <path key={index} d={path} strokeOpacity={index % 4 === 0 ? 0.48 : 0.22} />
           ))}
         </g>
+        <g id="ef-idlg-bar-contours" fill="none" stroke="#b3b7ab" strokeWidth="1.6">
+          {BAR_CONTOUR_PATHS.map((path, index) => (
+            <path key={index} d={path} strokeOpacity={index % 2 === 0 ? 0.85 : 0.6} />
+          ))}
+        </g>
       </defs>
     </svg>
   );
 }
 
+type ChapterCardSpec = {
+  tag: string;
+  title: string;
+  /** 卡片右侧的附注：地址、日期、等级或失败原因 */
+  value?: string;
+  /** 有链接时整卡可点，新标签页打开 */
+  href?: string;
+  /** 站点封面：放在标题卡下方的内容区 */
+  image?: string;
+  /** 分组卡片（技术栈）：组内条目以旧版小卡形式铺在标题卡下方 */
+  items?: DialogGroupItem[];
+  /** 失败区的「重新获取」动作卡 */
+  action?: () => void;
+};
+
+type ChapterCardEntry = ChapterCardSpec & { no: string; key: string };
+
+/** 把弹窗内容按图二章节卡排列：封面预览、meta 行、外链、技术栈条目、失败源、重试动作依次编号。 */
+function buildChapterCards(content: DialogContent): ChapterCardEntry[] {
+  const cards: ChapterCardSpec[] = [];
+  if (content.image) cards.push({ tag: "PREVIEW", title: "预览", image: content.image });
+  for (const row of content.meta) {
+    cards.push({ tag: "CHAPTER", title: row.label, value: row.value, href: row.href });
+  }
+  for (const link of content.links ?? []) {
+    cards.push({
+      tag: "CHAPTER",
+      title: link.title,
+      value: [link.source, link.note].filter((part): part is string => Boolean(part)).join(" · "),
+      href: link.url,
+    });
+  }
+  for (const group of content.groups ?? []) {
+    cards.push({ tag: "GROUP", title: group.label, items: group.items });
+  }
+  for (const failure of content.failures ?? []) {
+    cards.push({ tag: "CHAPTER", title: failure.name, value: failure.reason, href: failure.url });
+  }
+  if (content.failures?.length && content.onRetry && !content.isRetrying && content.notice?.tone !== "error") {
+    cards.push({ tag: "SYSTEM", title: "重新获取", action: content.onRetry });
+  }
+  return cards.map((card, index) => ({
+    ...card,
+    no: String(index + 1).padStart(2, "0"),
+    key: `${index}:${card.title}`,
+  }));
+}
+
+/** 章节卡右上角黄色书签里的默认图记：两栏书页，对应图二的黄色小图标。 */
+function ChapterGlyph() {
+  return (
+    <svg viewBox="0 0 16 16" aria-hidden="true">
+      <rect x="2.4" y="2.4" width="4" height="11.2" rx="0.5" fill="none" stroke="currentColor" strokeWidth="1.6" />
+      <rect x="9.2" y="2.4" width="4.4" height="11.2" rx="0.5" fill="none" stroke="currentColor" strokeWidth="1.6" />
+    </svg>
+  );
+}
+
+function ChapterCard({ card }: { card: ChapterCardEntry }) {
+  const isGroup = Boolean(card.items?.length);
+  const inner = (
+    <span className={`ef-idlg__chapter${isGroup ? " ef-idlg__chapter--group" : ""}`}>
+      <span className="ef-idlg__chapter-head">
+        <span className="ef-idlg__chapter-rail" aria-hidden="true" />
+        <span className="ef-idlg__chapter-no" aria-hidden="true">
+          <i className="ef-idlg__chapter-plate" />
+          <span className="ef-idlg__chapter-num">
+            <b>{card.no}</b>
+            <em className="ef-idlg__chapter-tag">{card.tag}</em>
+          </span>
+        </span>
+        <span className="ef-idlg__chapter-body">
+          <span className="ef-idlg__chapter-titlewrap">
+            <span className="ef-idlg__chapter-title">
+              <i aria-hidden="true">[</i>
+              <span>{card.title}</span>
+              <i aria-hidden="true">]</i>
+            </span>
+            <span className="ef-idlg__chapter-rule" aria-hidden="true" />
+          </span>
+        </span>
+        <span className="ef-idlg__chapter-side">
+          <span className="ef-idlg__chapter-arrow" aria-hidden="true" />
+        </span>
+      </span>
+      <span className="ef-idlg__chapter-icon" aria-hidden="true">
+        <ChapterGlyph />
+      </span>
+      {(card.items || card.image || card.value) && (
+        <span className="ef-idlg__chapter-content">
+          {card.items && (
+            <span className="ef-idlg__group-items">
+              {card.items.map((item) => (
+                <span className="ef-idlg__group-item" key={item.name} data-level={item.level}>
+                  {item.icon && <TechStackIcon name={item.icon} />}
+                  <span className="ef-idlg__group-item-body">
+                    <span className="ef-idlg__group-item-name">{item.name}</span>
+                    {item.level && <small>{item.level}</small>}
+                  </span>
+                </span>
+              ))}
+            </span>
+          )}
+          {card.image && <img className="ef-idlg__chapter-shot" src={card.image} alt="" />}
+          {card.value && <span className="ef-idlg__chapter-note">{card.value}</span>}
+        </span>
+      )}
+    </span>
+  );
+  const className = `ef-idlg__entry${card.action ? " ef-idlg__entry--action" : ""}`;
+  if (card.href) {
+    return (
+      <a className={className} href={card.href} target="_blank" rel="noopener noreferrer">
+        {inner}
+      </a>
+    );
+  }
+  if (card.action) {
+    return (
+      <button className={className} type="button" onClick={card.action}>
+        {inner}
+      </button>
+    );
+  }
+  return (
+    <div className={className} data-static="true">
+      {inner}
+    </div>
+  );
+}
+
 export function DialogFace({ content }: { content: DialogContent }) {
-  // pattern 必须用独立 id，避免整页其他副本引用到同一份。
-  const wordUid = useId().replace(/[^a-zA-Z0-9_-]/g, "");
-  const wordLineId = `ef-idlg-wordline-${wordUid}`;
+  const cards = buildChapterCards(content);
   return (
     <div className="ef-idlg__surface">
-      <div className="ef-idlg__toplines" aria-hidden="true" />
-      <div className="ef-idlg__topword" aria-hidden="true">
-        <svg viewBox="0 0 1032 160" preserveAspectRatio="none">
-          <defs>
-            <pattern
-              id={wordLineId}
-              width="7"
-              height="7"
-              patternUnits="userSpaceOnUse"
-              patternTransform="rotate(45)"
-            >
-              <line x1="0" y1="0" x2="0" y2="7" stroke="#10120d" strokeOpacity="0.85" strokeWidth="3" />
-            </pattern>
-          </defs>
-          <text x="0" y="124" textLength="1032" lengthAdjust="spacingAndGlyphs" fill={`url(#${wordLineId})`}>
-            ENDFIELD
-          </text>
-        </svg>
-      </div>
-      <div className="ef-idlg__topline" aria-hidden="true" />
-      <svg className="ef-idlg__contours" viewBox="0 0 600 520" preserveAspectRatio="none" aria-hidden="true">
-        <use href="#ef-idlg-contours" />
-      </svg>
-      <div className="ef-idlg__content">
-        <div className="ef-idlg__heading">
-          <span className="ef-idlg__plate-tag" aria-hidden="true">
-            <svg viewBox="0 0 24 24">
-              <circle
-                cx="12"
-                cy="12"
-                r="8"
-                fill="none"
-                stroke="currentColor"
-                strokeWidth="2.8"
-                strokeDasharray="34 8"
-                transform="rotate(-50 12 12)"
-              />
-            </svg>
-          </span>
-          <span className="ef-idlg__meta-note" aria-hidden="true">
-            ARKNIGHTS: ENDFIELD
-          </span>
-          <div className="ef-idlg__plate">
-            <h2 className="ef-idlg__title">{content.title}</h2>
-            <div className="ef-idlg__subtitle">
-              <span>{content.subtitle}</span>
-              <i className="ef-idlg__marks" aria-hidden="true">
-                <b />
-                <b />
-                <b />
-                <b />
-              </i>
-            </div>
-          </div>
+      <header className="ef-idlg__head">
+        <div className="ef-idlg__bar">
+          <svg className="ef-idlg__bar-tex" viewBox="0 0 600 520" preserveAspectRatio="none" aria-hidden="true">
+            <use href="#ef-idlg-contours" />
+          </svg>
+          <span className="ef-idlg__bar-title">// {content.title}</span>
         </div>
-        <p className="ef-idlg__body">{content.description}</p>
+        <div className="ef-idlg__titleband">
+          <h2 className="ef-idlg__title" title={content.subtitle}>
+            <i aria-hidden="true">[</i>
+            <span>{content.subtitle}</span>
+            <i aria-hidden="true">]</i>
+          </h2>
+        </div>
+        {/* 分界线（图一）：黑条内放 READ ME. 与介绍，三色条贴在黑条下缘，右端留三角戳。 */}
+        <div className="ef-idlg__divider">
+          <span className="ef-idlg__divider-bar">
+            <svg className="ef-idlg__divider-tex" viewBox="0 0 780 64" preserveAspectRatio="none" aria-hidden="true">
+              <use href="#ef-idlg-bar-contours" />
+            </svg>
+            <span className="ef-idlg__lead-tag" aria-hidden="true">
+              // READ ME.
+            </span>
+            <span className="ef-idlg__lead-text" title={content.description}>
+              {content.description}
+            </span>
+          </span>
+          <span className="ef-idlg__divider-marks" aria-hidden="true">
+            <i />
+            <i />
+            <i />
+          </span>
+          <span className="ef-idlg__divider-colors" aria-hidden="true" />
+        </div>
+      </header>
+      <div className="ef-idlg__board">
         {content.notice && (
           <div className={`ef-idlg__notice ef-idlg__notice--${content.notice.tone}`} role="status">
             <span>{content.notice.text}</span>
@@ -115,113 +237,20 @@ export function DialogFace({ content }: { content: DialogContent }) {
             )}
           </div>
         )}
-        {content.image && (
-          <div className="ef-idlg__media">
-            <img src={content.image} alt={content.subtitle} />
-          </div>
-        )}
-        {content.meta.length > 0 && (
-          <div className="ef-idlg__meta">
-            {content.meta.map((row) => (
-              <div className="ef-idlg__row" key={row.label}>
-                <b>{row.label}</b>
-                <i />
-                <span className="ef-idlg__value">{row.value}</span>
-                {row.href && (
-                  <button
-                    className="ef-idlg__jump"
-                    title="打开链接"
-                    aria-label="打开链接"
-                    onClick={() => window.open(row.href, "_blank", "noopener,noreferrer")}
-                  >
-                    <svg viewBox="0 0 24 24" aria-hidden="true">
-                      <path d="M7 17L17 7M9 7h8v8" />
-                    </svg>
-                  </button>
-                )}
-              </div>
-            ))}
-          </div>
-        )}
-        {content.links && content.links.length > 0 && (
-          <div className="ef-idlg__links">
-            {content.links.map((link) => (
-              <a
-                className="ef-idlg__link"
-                key={link.url}
-                href={link.url}
-                target="_blank"
-                rel="noopener noreferrer"
-              >
-                {link.source && <b className="ef-idlg__link-source">【{link.source}】</b>}
-                <span>{link.title}</span>
-                {link.note && <small>{link.note}</small>}
-              </a>
-            ))}
-          </div>
-        )}
-        {content.failures && content.failures.length > 0 && (
-          <section className="ef-idlg__failures">
-            <header className="ef-idlg__failures-head">
-              <b>暂时无法获取</b>
-              <span>{content.failures.length}</span>
-              {content.onRetry && !content.isRetrying && content.notice?.tone !== "error" && (
-                <button type="button" className="ef-idlg__retry" onClick={content.onRetry}>
-                  重新获取
-                </button>
-              )}
-            </header>
-            <div className="ef-idlg__failures-list">
-              {content.failures.map((failure, index) =>
-                failure.url ? (
-                  <a
-                    className="ef-idlg__failure"
-                    href={failure.url}
-                    key={`${failure.name}:${index}`}
-                    rel="noopener noreferrer"
-                    target="_blank"
-                  >
-                    <b>{failure.name}</b>
-                    <span>{failure.reason}</span>
-                  </a>
-                ) : (
-                  <div className="ef-idlg__failure" key={`${failure.name}:${index}`}>
-                    <b>{failure.name}</b>
-                    <span>{failure.reason}</span>
-                  </div>
-                ),
-              )}
-            </div>
-          </section>
-        )}
-        {content.groups && content.groups.length > 0 && (
-          <div className="ef-idlg__groups">
-            {content.groups.map((group) => (
-              <section className="ef-idlg__group" key={group.label}>
-                <h3 className="ef-idlg__group-label">{group.label}</h3>
-                <ul className="ef-idlg__group-items">
-                  {group.items.map((item) => (
-                    <li key={item.name} data-level={item.level}>
-                      {item.icon && <TechStackIcon name={item.icon} />}
-                      <span className="ef-idlg__group-body">
-                        <span className="ef-idlg__group-name">{item.name}</span>
-                        {item.level && <small>{item.level}</small>}
-                      </span>
-                    </li>
-                  ))}
-                </ul>
-              </section>
-            ))}
-          </div>
-        )}
-        <footer className="ef-idlg__hint">
-          <span>ESC // CLOSE</span>
-          <div className="ef-idlg__chips" aria-hidden="true">
+        <div className="ef-idlg__chapters">
+          {cards.map((card) => (
+            <ChapterCard key={card.key} card={card} />
+          ))}
+        </div>
+        <div className="ef-idlg__progressrow" aria-hidden="true">
+          <span className="ef-idlg__progress">
             <i />
             <i />
             <i />
-          </div>
-        </footer>
+            <i />
+            <i />
+          </span>
+        </div>
       </div>
     </div>
   );
@@ -251,8 +280,8 @@ export function InfoDialog({
   const pixelPhaseRef = useRef(1);
   const closeStartPhaseRef = useRef(0);
   const [isNarrow] = useState(dialogIsNarrow);
-  // 站点入口弹窗带封面媒体块、RSS/友链弹窗带外链列表：卡片按内容加高（视口封顶），桌面端以 inline style
-  // 覆盖固定高度；窄屏走 CSS 的内容自适应高度，不加 inline。尺寸口径与空闲期的预栅格化同源（scene/dialog-raster-cache.ts）。
+  // 外链/分组/状态提示弹窗按内容加高（视口封顶），桌面端以 inline style 覆盖固定高度；
+  // 窄屏走 CSS 的内容自适应高度，不加 inline。尺寸口径与空闲期的预栅格化同源（scene/dialog-raster-cache.ts）。
   const cardHeight = dialogCardHeight(displayContent);
   const panelHeight = dialogPanelHeight(cardHeight);
   // 快照身份在挂载时定格：编排只跑一次，抓取中途更新的内容不进这份快照（与栅格化时机一致）。

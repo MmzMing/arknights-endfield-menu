@@ -628,25 +628,19 @@
 .ef-mus__eq--small i { width: 2px; }
 
 /* ---- 关闭键与提示 ---- */
-/* 关闭键贴在卡片右缘外，露出的宽度与下方模式签完全一致（50px），右缘同列；红底灰斜纹 */
+/* 关闭键只留一个淡出的 X：无边框、无底框，悬停变黄并旋转。 */
 .ef-mus__close {
-  position: absolute; left: 1139px; top: 155px; z-index: 6;
-  display: grid; place-items: center; width: 51px; height: 54px; padding: 13px;
-  border: 1px solid var(--ef-mus-ink); border-radius: 4px;
-  background:
-    repeating-linear-gradient(135deg, rgba(133, 138, 128, 0.55) 0 2px, transparent 2px 7px),
-    var(--ef-mus-red);
-  color: var(--ef-mus-paper);
-  box-shadow: inset 0 0 0 2px var(--ef-mus-paper), inset 0 0 0 3px rgba(21, 23, 14, 0.5);
-  transition: background-color 0.14s, color 0.14s, transform 0.14s;
+  position: absolute; left: 1142px; top: 160px; z-index: 6;
+  display: grid; place-items: center; width: 44px; height: 44px; padding: 6px;
+  border: 0; background: none; color: rgba(242, 241, 233, 0.42);
+  transition: color 0.14s, transform 0.14s;
 }
 .ef-mus__close svg { display: block; width: 100%; height: 100%; transition: transform 0.14s; }
-.ef-mus__close:hover { --ef-mus-red: #f0574a; }
-.ef-mus__close:hover svg, .ef-mus__close:focus-visible svg { transform: rotate(90deg); }
-.ef-mus__close:active { transform: scale(0.96); }
-.ef-mus__close:focus-visible {
-  outline: 2px solid var(--ef-mus-yellow); outline-offset: 3px;
-}
+.ef-mus__close:hover { color: var(--ef-mus-yellow); }
+.ef-mus__close:hover svg { transform: rotate(90deg); }
+.ef-mus__close:active { transform: scale(0.94); }
+/* 自动聚焦时也只做极淡的提亮，不出现焦点框。 */
+.ef-mus__close:focus-visible { color: rgba(242, 241, 233, 0.68); outline: none; }
 .ef-mus__hint {
   position: absolute; left: 660px; top: 742px;
   font-family: var(--ef-font-mono); font-size: 8px; font-weight: 600; letter-spacing: 0.16em;
@@ -718,7 +712,7 @@
   .ef-mus__ctl--play { width: 52px; height: 52px; }
   .ef-mus__ctl--play svg { width: 23px; height: 23px; }
   .ef-mus__vbtn { width: 34px; height: 34px; }
-  .ef-mus__close { position: fixed; left: auto; right: 16px; top: 16px; width: 40px; height: 40px; padding: 10px; }
+  .ef-mus__close { position: fixed; left: auto; right: 16px; top: 16px; width: 40px; height: 40px; padding: 6px; }
   .ef-mus__hint { display: none; }
 }
 @media (max-width: 520px) {
@@ -762,7 +756,7 @@
   .ef-mus__row-text { padding-left: 9px; }
   .ef-mus__row-name { font-size: 12px; }
   .ef-mus__list { min-height: 284px; }
-  .ef-mus__close { right: 12px; top: 12px; width: 36px; height: 36px; padding: 9px; }
+  .ef-mus__close { right: 12px; top: 12px; width: 36px; height: 36px; padding: 5px; }
 }
 @media (prefers-reduced-motion: reduce) {
   .ef-mus__vinyl, .ef-mus__cover img, .ef-mus__spinner { animation: none; }

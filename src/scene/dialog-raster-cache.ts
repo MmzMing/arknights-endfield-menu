@@ -9,7 +9,7 @@ const CARD_MAX_HEIGHT = 780;
 const CARD_VIEWPORT_PADDING = 48;
 const PANEL_SCALE = 0.72;
 
-/** 卡片是否带需要加高的扩展块（封面 / 外链列表 / 分组 / 状态提示 / 失败区）。 */
+/** 卡片是否带需要加高的扩展块（封面内容区 / 外链列表 / 分组 / 状态提示 / 失败区）。 */
 function hasExtendedBody(content: DialogContent): boolean {
   return Boolean(
     content.image ||

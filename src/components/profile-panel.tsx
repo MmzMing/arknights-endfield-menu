@@ -432,8 +432,6 @@ export function ProfilePanel({
 
             <button className="ef-prof__close" ref={closeRef} type="button" onClick={requestClose} title="关闭" aria-label="关闭个人档案">
               <CloseIcon className="ef-prof__close-icon" />
-              <span className="ef-prof__close-cn">关闭</span>
-              <span className="ef-prof__close-en">CLOSE</span>
             </button>
           </div>
         </div>
