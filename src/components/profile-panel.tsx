@@ -6,6 +6,7 @@ import { formatMonthDay, getSiteCycle, type SiteCycle } from "../lib/site-time";
 import type { MusicPlayerApi } from "../hooks/use-music-player";
 import type { MusicPlaceholder, ProfilePanelContent, TechStackMetric } from "../config/profile-panel-config";
 import type { PlayerContent } from "./player-badge";
+import { CloseIcon } from "./close-icon";
 import "../styles/profile-panel.css";
 
 /* 个人档案弹窗：点击左下角玩家卡片展开。参考图的四层水平构图——
@@ -430,9 +431,7 @@ export function ProfilePanel({
             <ProfileCard player={player} panel={panel} cycle={cycle} cardRef={cardRef} />
 
             <button className="ef-prof__close" ref={closeRef} type="button" onClick={requestClose} title="关闭" aria-label="关闭个人档案">
-              <svg className="ef-prof__close-icon" viewBox="0 0 24 24" aria-hidden="true">
-                <path d="M4 4L20 20M20 4L4 20" />
-              </svg>
+              <CloseIcon className="ef-prof__close-icon" />
               <span className="ef-prof__close-cn">关闭</span>
               <span className="ef-prof__close-en">CLOSE</span>
             </button>

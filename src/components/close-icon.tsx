@@ -1,0 +1,12 @@
+/** 全局关闭字形：四段折角拼成的 X（57×57）。填充走 currentColor，随所在按钮的颜色走。 */
+export function CloseIcon({ className }: { className?: string }) {
+  return (
+    <svg className={className} viewBox="0 0 57 57" aria-hidden="true">
+      <path
+        fillRule="evenodd"
+        fill="currentColor"
+        d="M28.137,20.301 L48.026,0.414 L55.651,8.038 L35.762,27.925 L28.137,20.301 ZM56.625,48.787 L49.000,56.411 L28.137,35.550 L35.762,27.925 L56.625,48.787 ZM8.428,55.256 L0.803,47.632 L20.511,27.925 L28.137,35.550 L8.428,55.256 ZM1.777,9.193 L9.402,1.568 L28.137,20.301 L20.511,27.925 L1.777,9.193 Z"
+      />
+    </svg>
+  );
+}

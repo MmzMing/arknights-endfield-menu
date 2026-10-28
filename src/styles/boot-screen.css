@@ -1,172 +1,292 @@
-/* 全屏预设加载页（新 UI）：大字号百分比读数 + 完成后四象限各自朝本角滑出。
-   这里的动画节奏属于该界面自身，不是 demo 迁移的测量资产。 */
+/* 全屏加载页：逐像素复刻《明日方舟：终末地》官方加载界面。
+   版式数值取自官方加载页样式表（按 2560×1440 设计稿），用 --ef-boot-u 等比缩放：
+     横屏 u = 16 × min(vw/2560, vh/1440)；竖屏 u = 16 × min(vh/1920, vw/1080)。
+   进度变量 --ef-boot-progress（0..1）由组件逐帧直写，同时驱动：
+     左侧条形的高度、读数区的下移、背景等高线的清晰度（右侧随进度渐入）。
+   完成退场：0.5s 后黄色自左向右覆盖 0.6s，1.4s 起整页淡出 1s。 */
+
+@font-face {
+  font-family: "EF Boot Sans";
+  src: url("/assets/fonts/harmonyos-sans-sc-regular.woff2") format("woff2");
+  font-style: normal;
+  font-weight: 400;
+  font-display: block;
+}
+
+@font-face {
+  font-family: "EF Boot Sans";
+  src: url("/assets/fonts/harmonyos-sans-sc-medium.woff2") format("woff2");
+  font-style: normal;
+  font-weight: 500;
+  font-display: block;
+}
 
 .ef-boot {
-  --ef-boot-paper: #eceae5;
-  --ef-boot-ink: #1a1c1e;
-  --ef-boot-soft: rgba(26, 28, 30, 0.56);
-  --ef-boot-faint: rgba(26, 28, 30, 0.3);
-  --ef-boot-slide: 0.66s;
+  --ef-boot-u: min(0.625vw, 1.1111vh);
   position: fixed;
   inset: 0;
   z-index: 200;
   overflow: hidden;
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  color: var(--ef-boot-ink);
+  color: #fff;
   font-family: var(--ef-font-cn);
-  animation: efBootIn 0.2s ease both;
+  background: #141414;
 }
 
-/* 四块纸面底色完全一致：静止时看不出切分，只有滑开的那一刻才显出四块。 */
-.ef-boot__quads {
+/* 等高线底图：进度越大模糊越小，右侧地形随加载逐渐清晰。 */
+.ef-boot__bg {
   position: absolute;
   inset: 0;
-  display: grid;
-  grid-template-columns: 1fr 1fr;
-  grid-template-rows: 1fr 1fr;
+  background-image: url("/assets/images/boot-bg.jpg");
+  background-size: cover;
+  background-position: 50% center;
+  background-repeat: no-repeat;
+  filter: blur(calc((1 - var(--ef-boot-progress, 0)) * 8px));
 }
 
-.ef-boot__quads i {
-  display: block;
-  background: var(--ef-boot-paper);
-}
-
-.ef-boot__quads i:nth-child(1) { --qx: -102%; --qy: -102%; }
-.ef-boot__quads i:nth-child(2) { --qx: 102%; --qy: -102%; }
-.ef-boot__quads i:nth-child(3) { --qx: -102%; --qy: 102%; }
-.ef-boot__quads i:nth-child(4) { --qx: 102%; --qy: 102%; }
-
-.ef-boot__readout {
-  position: relative;
-  z-index: 1;
+.ef-boot__logo {
+  position: absolute;
+  left: 64.4531%;
+  top: calc(var(--ef-boot-u) * 27.625);
+  width: calc(var(--ef-boot-u) * 16.5);
+  height: calc(var(--ef-boot-u) * 16.75);
   display: flex;
-  align-items: flex-start;
+  align-items: center;
   justify-content: center;
-  gap: clamp(6px, 1vw, 14px);
-  font-family: var(--ef-font-en);
-  line-height: 0.86;
-  animation: efBootRise 0.5s cubic-bezier(0.16, 0.84, 0.24, 1) both;
 }
 
-.ef-boot__readout b {
-  font-size: clamp(96px, 19vw, 268px);
-  font-weight: 700;
-  letter-spacing: -0.02em;
-  font-variant-numeric: tabular-nums;
-  color: var(--ef-boot-ink);
+.ef-boot__logo svg {
+  display: block;
+  width: 100%;
+  height: auto;
 }
 
-.ef-boot__readout span {
-  font-size: clamp(20px, 3.2vw, 46px);
-  font-weight: 700;
-  letter-spacing: 0.06em;
-  color: var(--ef-boot-soft);
+.ef-boot__more {
+  position: absolute;
+  left: 64.4531%;
+  top: calc(var(--ef-boot-u) * 59.375);
+  white-space: nowrap;
 }
 
-.ef-boot__meta {
-  position: relative;
-  z-index: 1;
-  margin-top: clamp(18px, 3.4vh, 40px);
-  display: grid;
-  justify-items: center;
-  gap: 6px;
-  animation: efBootRise 0.5s 0.1s cubic-bezier(0.16, 0.84, 0.24, 1) both;
+.ef-boot__deco {
+  margin-left: calc(var(--ef-boot-u) * -0.5);
+  width: calc(var(--ef-boot-u) * 8.8125);
+  height: calc(var(--ef-boot-u) * 4);
+  background-image: url("/assets/images/boot-deco.svg");
+  background-size: 100% 100%;
+  background-repeat: no-repeat;
+  background-position: 50% center;
 }
 
-.ef-boot__label {
-  font-family: var(--ef-font-mono);
-  font-size: clamp(9px, 0.92vw, 13px);
-  letter-spacing: 0.34em;
-  text-indent: 0.34em;
-  color: var(--ef-boot-soft);
+.ef-boot__divider {
+  margin-top: calc(var(--ef-boot-u) * 1.25);
+  margin-left: calc(var(--ef-boot-u) * -21.625);
+  margin-bottom: calc(var(--ef-boot-u) * 1);
+  width: calc(var(--ef-boot-u) * 70);
+  height: 2px;
+  background-image: linear-gradient(90deg, rgba(255, 255, 255, 0) 0px, rgba(255, 255, 255, 0.1) 50%, rgba(255, 255, 255, 0));
 }
 
-.ef-boot__id {
-  font-family: var(--ef-font-mono);
-  font-size: clamp(8px, 0.74vw, 11px);
-  letter-spacing: 0.26em;
-  text-indent: 0.26em;
-  color: var(--ef-boot-faint);
+.ef-boot__slogan {
+  font-family: "EF Boot Sans", var(--ef-font-cn);
+  font-size: calc(var(--ef-boot-u) * 1.5);
+  font-weight: 400;
 }
 
-/* 细横线兼进度：与百分比同源，读数跳变时靠 transition 抹平。 */
-.ef-boot__rule {
-  position: relative;
-  z-index: 1;
-  margin-top: clamp(20px, 3.6vh, 44px);
-  width: min(520px, 58vw);
-  height: 1px;
-  background: rgba(26, 28, 30, 0.18);
-  animation: efBootRise 0.5s 0.18s cubic-bezier(0.16, 0.84, 0.24, 1) both;
+.ef-boot__triangles {
+  position: absolute;
+  left: calc(var(--ef-boot-u) * -3.375);
+  top: calc(var(--ef-boot-u) * 1.5);
+  width: calc(var(--ef-boot-u) * 1.4375);
+  height: calc(var(--ef-boot-u) * 1.3125);
+  background-image: url("/assets/images/boot-triangles.svg");
+  background-size: 100% 100%;
+  background-repeat: no-repeat;
 }
 
-.ef-boot__rule i {
+.ef-boot__progress {
   position: absolute;
   left: 0;
   top: 0;
-  height: 1px;
-  width: calc(var(--ef-boot-progress, 0) * 100%);
-  background: var(--ef-boot-ink);
-  transition: width 0.18s linear;
+  width: calc(var(--ef-boot-u) * 1.25);
+  height: 100%;
 }
 
-.ef-boot__error { max-width: min(520px, 85vw); padding-top: 16px; text-align: center; font-size: 13px; line-height: 1.6; }
-.ef-boot__actions { display: flex; justify-content: center; flex-wrap: wrap; gap: 12px; margin-top: 12px; }
-.ef-boot__actions button { padding: 8px 14px; border: 1px solid currentColor; background: transparent; color: inherit; font: inherit; }
-.ef-boot__actions button:focus-visible { outline: 2px solid currentColor; outline-offset: 3px; }
-
-/* ---- 退场：读数先隐，四象限各自朝本角滑出 ---- */
-
-.ef-boot[data-exiting="true"] .ef-boot__readout,
-.ef-boot[data-exiting="true"] .ef-boot__meta,
-.ef-boot[data-exiting="true"] .ef-boot__rule {
-  animation: efBootFadeOut 0.22s ease forwards;
+.ef-boot__bar {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: calc(var(--ef-boot-progress, 0) * 100%);
+  background-color: #FFFA00;
 }
 
-.ef-boot[data-exiting="true"] .ef-boot__quads i {
-  animation: efQuadOut var(--ef-boot-slide) cubic-bezier(0.7, 0, 0.24, 1) both;
+/* 读数挂在条形的末端：刻度、百分比在末端上方，Updating... 在末端下方。 */
+.ef-boot__readout {
+  position: absolute;
+  left: calc(var(--ef-boot-u) * 3.125);
+  top: calc(var(--ef-boot-progress, 0) * 100%);
+  height: 0;
 }
 
-.ef-boot[data-exiting="true"] .ef-boot__quads i:nth-child(1) { animation-delay: 0.06s; }
-.ef-boot[data-exiting="true"] .ef-boot__quads i:nth-child(2) { animation-delay: 0s; }
-.ef-boot[data-exiting="true"] .ef-boot__quads i:nth-child(3) { animation-delay: 0s; }
-.ef-boot[data-exiting="true"] .ef-boot__quads i:nth-child(4) { animation-delay: 0.06s; }
-
-@keyframes efBootIn {
-  from { opacity: 0; }
-  to { opacity: 1; }
+.ef-boot__core {
+  position: absolute;
+  left: 0;
+  bottom: calc(var(--ef-boot-u) * 1.625);
+  color: #FFFA00;
+  line-height: 1;
+  white-space: nowrap;
 }
 
-@keyframes efBootRise {
-  from { opacity: 0; transform: translateY(14px); }
-  to { opacity: 1; transform: translateY(0); }
+.ef-boot__core::before {
+  content: "";
+  display: block;
+  width: calc(var(--ef-boot-u) * 0.5);
+  height: calc(var(--ef-boot-u) * 1.875);
+  margin-bottom: calc(var(--ef-boot-u) * 0.25);
+  border-radius: calc(var(--ef-boot-u) * 0.25);
+  background-color: #FFFA00;
 }
 
-@keyframes efBootFadeOut {
-  to { opacity: 0; }
+.ef-boot__value {
+  font-family: "EF Boot Sans", var(--ef-font-cn);
+  font-size: calc(var(--ef-boot-u) * 4.375);
+  font-weight: 500;
 }
 
-@keyframes efQuadOut {
-  from { transform: translate(0, 0) scale(1); opacity: 1; }
-  to { transform: translate(var(--qx), var(--qy)) scale(1.04); opacity: 0.72; }
+.ef-boot__symbol {
+  font-family: "EF Boot Sans", var(--ef-font-cn);
+  font-size: calc(var(--ef-boot-u) * 3.25);
+  font-weight: 400;
+}
+
+.ef-boot__updating {
+  position: absolute;
+  left: 0;
+  top: calc(var(--ef-boot-u) * -0.5);
+  color: #666;
+  font-family: "EF Boot Sans", var(--ef-font-cn);
+  font-size: calc(var(--ef-boot-u) * 1.15);
+  font-weight: 400;
+  line-height: 1;
+  letter-spacing: 0.05em;
+}
+
+.ef-boot__updating::before {
+  content: "";
+  display: block;
+  width: calc(var(--ef-boot-u) * 0.25);
+  height: calc(var(--ef-boot-u) * 0.5);
+  margin-bottom: calc(var(--ef-boot-u) * 0.2);
+  border-left: calc(var(--ef-boot-u) * 0.5) solid #666;
+  border-right: calc(var(--ef-boot-u) * 0.5) solid #666;
+}
+
+.ef-boot__error {
+  position: absolute;
+  left: 50%;
+  bottom: calc(var(--ef-boot-u) * 3);
+  z-index: 4;
+  width: min(calc(var(--ef-boot-u) * 38), 88vw);
+  transform: translateX(-50%);
+  padding: calc(var(--ef-boot-u) * 0.9) calc(var(--ef-boot-u) * 1.2);
+  border: 1px solid rgba(255, 250, 0, 0.45);
+  background: rgba(8, 8, 8, 0.86);
+  color: rgba(255, 255, 255, 0.78);
+  font-size: max(12px, calc(var(--ef-boot-u) * 1.05));
+  line-height: 1.7;
+  text-align: center;
+}
+
+.ef-boot__actions {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 12px;
+  margin-top: 12px;
+}
+
+.ef-boot__actions button {
+  padding: 6px 14px;
+  border: 1px solid #FFFA00;
+  background: transparent;
+  color: #FFFA00;
+}
+
+.ef-boot__actions button:hover { background: rgba(255, 250, 0, 0.1); }
+.ef-boot__actions button:focus-visible { outline: 2px solid #FFFA00; outline-offset: 3px; }
+
+/* ---- 完成退场：黄色左→右覆盖，然后整页渐出 ---- */
+
+.ef-boot[data-exiting="true"] {
+  opacity: 0;
+  transition: opacity 1s 1.4s;
+}
+
+.ef-boot[data-exiting="true"]::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  z-index: 3;
+  background: #FFFA00;
+  transform-origin: left center;
+  transform: scaleX(0);
+  animation: efBootWipe 0.6s cubic-bezier(1, 0, 0.7, 1) 0.5s forwards;
+}
+
+@keyframes efBootWipe {
+  to { transform: scaleX(1); }
+}
+
+/* ---- 竖屏：官方把进度条横置于底部、logo 居中；背景换竖版裁切 ---- */
+
+@media (orientation: portrait) {
+  .ef-boot { --ef-boot-u: min(0.8333vh, 1.4815vw); }
+
+  .ef-boot__bg {
+    background-image: url("/assets/images/boot-bg-portrait.jpg");
+  }
+
+  .ef-boot__logo {
+    left: 50%;
+    top: calc(var(--ef-boot-u) * 50);
+    width: calc(var(--ef-boot-u) * 19.3125);
+    height: calc(var(--ef-boot-u) * 20.9375);
+    transform: translate(-50%, -50%);
+  }
+
+  .ef-boot__more {
+    left: calc(var(--ef-boot-u) * 4.625);
+    top: auto;
+    bottom: calc(var(--ef-boot-u) * 5.75);
+  }
+
+  .ef-boot__triangles { display: none; }
+
+  .ef-boot__progress {
+    left: 0;
+    top: auto;
+    bottom: calc(var(--ef-boot-u) * 17.75);
+    width: 82.4074%;
+    height: calc(var(--ef-boot-u) * 2.5);
+  }
+
+  .ef-boot__bar {
+    width: calc(var(--ef-boot-progress, 0) * 100%);
+    height: 100%;
+  }
+
+  .ef-boot__readout {
+    left: calc(var(--ef-boot-progress, 0) * 100%);
+    top: auto;
+    bottom: calc(var(--ef-boot-u) * -1.75);
+    margin-left: calc(var(--ef-boot-u) * 0.75);
+  }
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .ef-boot,
-  .ef-boot__readout,
-  .ef-boot__meta,
-  .ef-boot__rule {
-    animation: none;
-  }
+  .ef-boot__bg { filter: blur(4px); }
 
-  .ef-boot[data-exiting="true"] {
-    animation: efBootFadeOut 0.18s ease forwards;
-  }
+  .ef-boot[data-exiting="true"] { transition: opacity 0.18s ease; }
 
-  .ef-boot[data-exiting="true"] .ef-boot__quads i {
-    animation: none;
-  }
+  .ef-boot[data-exiting="true"]::after { display: none; }
 }

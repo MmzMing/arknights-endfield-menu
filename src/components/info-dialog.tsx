@@ -12,6 +12,7 @@ import {
   getDialogRaster,
 } from "../scene/dialog-raster-cache";
 import { PIXEL_TRANSITION_DURATION } from "../lib/pixel-transition";
+import { CloseIcon } from "./close-icon";
 import "../styles/info-dialog.css";
 
 const CONTOUR_PATHS = createTopoContourPaths({
@@ -432,9 +433,7 @@ export function InfoDialog({
               <DialogFace content={displayContent} />
             </div>
             <button className="ef-idlg__close" ref={closeRef} title="关闭" aria-label="关闭" onClick={requestClose}>
-              <svg viewBox="0 0 24 24" aria-hidden="true">
-                <path d="M5 5L19 19M19 5L5 19" />
-              </svg>
+              <CloseIcon />
             </button>
           </div>
         </div>

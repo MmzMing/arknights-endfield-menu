@@ -79,10 +79,6 @@ export default function App() {
     setCanAnimate(animate);
     setBooting(false);
   }, []);
-  const bootIdentity = useMemo(
-    () => ({ name: content.player.name, code: content.player.uid.replace(/^UID\s*[:：]\s*/i, "") }),
-    [content.player],
-  );
   const feeds = useFeeds(dialog === "rss");
   const essentialDialogs = useMemo(() => [
     ...Object.values(content.dialogs),
@@ -266,7 +262,6 @@ export default function App() {
           texts={dialogPresets.texts}
           images={dialogPresets.images}
           contents={bootWarmContents}
-          identity={bootIdentity}
           onDone={finishBoot}
         />
       )}

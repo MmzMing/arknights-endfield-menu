@@ -252,7 +252,8 @@
 .ef-prof__close::before {
   content: ""; position: absolute; left: 12px; right: 12px; top: 5px; height: 2px; background: var(--ef-yellow);
 }
-.ef-prof__close-icon { width: 32px; height: 32px; margin-left: 2px; fill: none; stroke: currentColor; stroke-width: 3.2; stroke-linecap: square; }
+.ef-prof__close-icon { width: 32px; height: 32px; margin-left: 2px; transition: transform 0.14s; }
+.ef-prof__close:hover .ef-prof__close-icon, .ef-prof__close:focus-visible .ef-prof__close-icon { transform: rotate(90deg); }
 .ef-prof__close-cn { font-size: 10px; font-weight: 700; letter-spacing: 0.08em; }
 .ef-prof__close-en {
   position: absolute; right: 6px; bottom: 10px; writing-mode: vertical-rl;

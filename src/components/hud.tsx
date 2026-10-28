@@ -1,6 +1,7 @@
 import { cssVars } from "../lib/label-svg";
 import { useMenuActions } from "../menu-actions";
 import { useNetStatus } from "../hooks/use-net-status";
+import { CloseIcon } from "./close-icon";
 import "../styles/hud.css";
 
 /* HUD controls: system buttons (top left), power button (bottom left), close button (top right)
@@ -57,9 +58,7 @@ export function CloseButton() {
       onClick={requestClose}
     >
       <span>
-        <svg className="ef-icon">
-          <use href="#ic-x" />
-        </svg>
+        <CloseIcon className="ef-icon" />
       </span>
     </button>
   );

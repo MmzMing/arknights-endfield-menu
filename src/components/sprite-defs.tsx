@@ -32,9 +32,6 @@ export function SpriteDefs() {
           <symbol id="ic-power" viewBox="0 0 48 48" fill="currentColor" stroke="none">
             <path fill-rule="evenodd" d="M17.04 4.09A21.09 21.09 0 1 0 30.96 4.09V11.43A14.37 14.37 0 1 1 17.04 11.43Z M19.48 0.75H28.08V26.9H19.48Z"></path>
           </symbol>
-          <symbol id="ic-x" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4">
-            <path d="m5 5 14 14M19 5 5 19"></path>
-          </symbol>
           <symbol id="ic-signal" viewBox="0 0 16 14" fill="currentColor" stroke="none">
             <path d="M0 10h3v4H0ZM4.3 7h3v7h-3ZM8.6 3.5h3V14h-3ZM12.9 0H16v14h-3.1Z"></path>
           </symbol>

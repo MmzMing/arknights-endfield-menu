@@ -640,8 +640,9 @@
   box-shadow: inset 0 0 0 2px var(--ef-mus-paper), inset 0 0 0 3px rgba(21, 23, 14, 0.5);
   transition: background-color 0.14s, color 0.14s, transform 0.14s;
 }
-.ef-mus__close svg { display: block; width: 100%; height: 100%; }
-.ef-mus__close:hover { --ef-mus-red: #f0574a; transform: scale(1.06); }
+.ef-mus__close svg { display: block; width: 100%; height: 100%; transition: transform 0.14s; }
+.ef-mus__close:hover { --ef-mus-red: #f0574a; }
+.ef-mus__close:hover svg, .ef-mus__close:focus-visible svg { transform: rotate(90deg); }
 .ef-mus__close:active { transform: scale(0.96); }
 .ef-mus__close:focus-visible {
   outline: 2px solid var(--ef-mus-yellow); outline-offset: 3px;

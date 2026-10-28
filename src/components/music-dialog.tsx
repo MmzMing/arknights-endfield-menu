@@ -4,6 +4,7 @@ import { createTopoContourPaths } from "../lib/topo-contours";
 import { formatMusicTime } from "../lib/music";
 import { MUSIC_DIALOG_COPY } from "../config/music-config";
 import type { MusicPlayerApi, MusicTimeSnapshot } from "../hooks/use-music-player";
+import { CloseIcon } from "./close-icon";
 import "../styles/music-dialog.css";
 
 /* 音乐终端弹窗：从主菜单的圆盘语言演进而来——
@@ -163,14 +164,6 @@ function VolumeIcon({ muted }: { muted: boolean }) {
           strokeLinecap="round"
         />
       )}
-    </svg>
-  );
-}
-
-function CloseIcon() {
-  return (
-    <svg viewBox="0 0 24 24" aria-hidden="true">
-      <path d="M6 6 18 18M18 6 6 18" fill="none" stroke="currentColor" strokeWidth="2.6" strokeLinecap="round" />
     </svg>
   );
 }
