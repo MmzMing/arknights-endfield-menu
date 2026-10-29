@@ -59,7 +59,7 @@ export function DialogContourDefs() {
 type ChapterCardSpec = {
   tag: string;
   title: string;
-  /** 卡片右侧的附注：地址、日期、等级或失败原因 */
+  /** 卡片右侧的附注：地址、日期或等级 */
   value?: string;
   /** 有链接时整卡可点，新标签页打开 */
   href?: string;
@@ -67,13 +67,12 @@ type ChapterCardSpec = {
   image?: string;
   /** 分组卡片（技术栈）：组内条目以旧版小卡形式铺在标题卡下方 */
   items?: DialogGroupItem[];
-  /** 失败区的「重新获取」动作卡 */
-  action?: () => void;
 };
 
 type ChapterCardEntry = ChapterCardSpec & { no: string; key: string };
 
-/** 把弹窗内容按图二章节卡排列：封面预览、meta 行、外链、技术栈条目、失败源、重试动作依次编号。 */
+/** 把弹窗内容按图二章节卡排列：封面预览、meta 行、外链、技术栈条目依次编号；
+    失败源不进章节卡，统一由顶部的失败区（FailurePanel）展示，重试入口也在那里。 */
 function buildChapterCards(content: DialogContent): ChapterCardEntry[] {
   const cards: ChapterCardSpec[] = [];
   if (content.image) cards.push({ tag: "PREVIEW", title: "预览", image: content.image });
@@ -90,12 +89,6 @@ function buildChapterCards(content: DialogContent): ChapterCardEntry[] {
   }
   for (const group of content.groups ?? []) {
     cards.push({ tag: "GROUP", title: group.label, items: group.items });
-  }
-  for (const failure of content.failures ?? []) {
-    cards.push({ tag: "CHAPTER", title: failure.name, value: failure.reason, href: failure.url });
-  }
-  if (content.failures?.length && content.onRetry && !content.isRetrying && content.notice?.tone !== "error") {
-    cards.push({ tag: "SYSTEM", title: "重新获取", action: content.onRetry });
   }
   return cards.map((card, index) => ({
     ...card,
@@ -116,8 +109,7 @@ function ChapterGlyph() {
 
 function ChapterCard({ card }: { card: ChapterCardEntry }) {
   const isGroup = Boolean(card.items?.length);
-  const inner = (
-    <span className={`ef-idlg__chapter${isGroup ? " ef-idlg__chapter--group" : ""}`}>
+  const inner = (    <span className={`ef-idlg__chapter${isGroup ? " ef-idlg__chapter--group" : ""}`}>
       <span className="ef-idlg__chapter-head">
         <span className="ef-idlg__chapter-rail" aria-hidden="true" />
         <span className="ef-idlg__chapter-no" aria-hidden="true">
@@ -165,25 +157,64 @@ function ChapterCard({ card }: { card: ChapterCardEntry }) {
       )}
     </span>
   );
-  const className = `ef-idlg__entry${card.action ? " ef-idlg__entry--action" : ""}`;
   if (card.href) {
     return (
-      <a className={className} href={card.href} target="_blank" rel="noopener noreferrer">
+      <a className="ef-idlg__entry" href={card.href} target="_blank" rel="noopener noreferrer">
         {inner}
       </a>
     );
   }
-  if (card.action) {
-    return (
-      <button className={className} type="button" onClick={card.action}>
-        {inner}
-      </button>
-    );
-  }
   return (
-    <div className={className} data-static="true">
+    <div className="ef-idlg__entry" data-static="true">
       {inner}
     </div>
+  );
+}
+
+/** 顶部失败区（RSS）：获取失败的源用红框常驻在内容区顶部，增量重新获取按钮就在这里，
+    不再作为章节卡沉到上百条更新后面。 */
+function FailurePanel({ content }: { content: DialogContent }) {
+  const failures = content.failures ?? [];
+  const retry = content.onRetry;
+  if (failures.length === 0) return null;
+  return (
+    <section className="ef-idlg__fails" role="status" aria-label="获取失败的订阅源">
+      <div className="ef-idlg__fails-head">
+        <span className="ef-idlg__fails-tag">// FETCH FAILED</span>
+        <span className="ef-idlg__fails-count">{failures.length} 个源暂时无法获取</span>
+        {retry && content.notice?.tone !== "error" && (
+          <button
+            type="button"
+            className="ef-idlg__fails-retry"
+            onClick={retry}
+            disabled={content.isRetrying}
+          >
+            {content.isRetrying ? "正在重新获取…" : "增量重新获取"}
+          </button>
+        )}
+      </div>
+      <ul className="ef-idlg__fails-list">
+        {failures.map((failure, index) => {
+          const body = (
+            <>
+              <span className="ef-idlg__fails-name">{failure.name}</span>
+              <small className="ef-idlg__fails-reason">{failure.reason}</small>
+            </>
+          );
+          return (
+            <li key={`${index}:${failure.name}`}>
+              {failure.url ? (
+                <a className="ef-idlg__fails-item" href={failure.url} target="_blank" rel="noopener noreferrer">
+                  {body}
+                </a>
+              ) : (
+                <span className="ef-idlg__fails-item">{body}</span>
+              )}
+            </li>
+          );
+        })}
+      </ul>
+    </section>
   );
 }
 
@@ -227,6 +258,7 @@ export function DialogFace({ content }: { content: DialogContent }) {
         </div>
       </header>
       <div className="ef-idlg__board">
+        <FailurePanel content={content} />
         {content.notice && (
           <div className={`ef-idlg__notice ef-idlg__notice--${content.notice.tone}`} role="status">
             <span>{content.notice.text}</span>
