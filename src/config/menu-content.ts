@@ -64,6 +64,8 @@ export interface DialogContent {
   title: string;
   subtitle: string;
   description: string;
+  /** 正文说明：作为第一张章节卡展示（配图在文案右侧），黑条只放默认说明 */
+  body?: string;
   meta: DialogMetaRow[];
   /** 站点入口弹窗扩展：封面图（描述后的媒体块） */
   image?: string;
@@ -313,12 +315,15 @@ export function feedDialog(
   };
 }
 
-/** 公告弹窗：标题固定为栏目名，副标题 / 正文 / 跳转链接来自当前这条公告的配置。 */
+/** 公告弹窗：标题固定为栏目名，配图 / 正文 / 跳转链接来自当前这条公告的配置；
+    黑条只显示栏目的默认说明；正文与配图是 01 号章节卡，跳转链接顺延为 02。 */
 export function announcementDialog(slide: NewsSlide): DialogContent {
   return {
     title: "BREAKING NEWS",
     subtitle: slide.title,
-    description: slide.detail,
+    description: "站点公告与更新动态。",
+    body: slide.detail,
+    image: slide.image,
     meta: slide.link ? [{ label: slide.link.label, value: slide.link.value, href: slide.link.href }] : [],
   };
 }
@@ -334,7 +339,7 @@ export function dialogFor(action: string, content: MenuContent): DialogContent {
 
 /** 拼出弹窗全部可见文案，供快照字体子集预热按覆盖范围预取（见 scene/dialog-pixel-renderer.ts）。 */
 export function collectDialogText(content: DialogContent): string {
-  const parts: string[] = [content.title, content.subtitle, content.description];
+  const parts: string[] = [content.title, content.subtitle, content.description, content.body ?? ""];
   for (const row of content.meta) parts.push(row.label, row.value);
   if (content.links) {
     for (const link of content.links) parts.push(link.source ?? "", link.title, link.note ?? "");

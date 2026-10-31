@@ -4,16 +4,16 @@ import type { NewsSlide } from "../components/news-panel";
     title / detail / link 为点击公告后弹窗中展示的详情。 */
 export const ANNOUNCEMENTS: NewsSlide[] = [
   {
-    caption: "GitHub // ccdr4gon/endfield_menu",
+    caption: "GitHub // MmzMing/arknights-endfield-menu",
     image: "/assets/images/og-cover.png",
     c1: "#3f3a55",
     c2: "#17151f",
     title: "项目开源",
-    detail: "本站为《明日方舟：终末地》主菜单的复刻与再实现，项目已开源，欢迎 Star、提交 Issue 或一起完善细节。",
+    detail: "本站为《明日方舟：终末地》主菜单的复刻与再实现。原项目：https://github.com/ccdr4gon/endfield_menu。项目已开源，欢迎 Star、提交 Issue 或一起完善细节。",
     link: {
       label: "开源地址",
-      value: "github.com/ccdr4gon/endfield_menu",
-      href: "https://github.com/ccdr4gon/endfield_menu",
+      value: "github.com/MmzMing/arknights-endfield-menu",
+      href: "https://github.com/MmzMing/arknights-endfield-menu",
     },
   },
   {

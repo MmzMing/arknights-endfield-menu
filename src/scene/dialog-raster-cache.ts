@@ -9,10 +9,11 @@ const CARD_MAX_HEIGHT = 780;
 const CARD_VIEWPORT_PADDING = 48;
 const PANEL_SCALE = 0.72;
 
-/** 卡片是否带需要加高的扩展块（封面内容区 / 外链列表 / 分组 / 状态提示 / 失败区）。 */
+/** 卡片是否带需要加高的扩展块（正文说明 / 封面内容区 / 外链列表 / 分组 / 状态提示 / 失败区）。 */
 function hasExtendedBody(content: DialogContent): boolean {
   return Boolean(
-    content.image ||
+    content.body ||
+      content.image ||
       content.links?.length ||
       content.groups?.length ||
       content.notice !== undefined ||
@@ -44,6 +45,7 @@ export function dialogRasterKey(content: DialogContent, cardHeight: number): str
     title: content.title,
     subtitle: content.subtitle,
     description: content.description,
+    body: content.body ?? "",
     image: content.image ?? "",
     notice: content.notice ? [content.notice.tone, content.notice.text] : null,
     isRetrying: Boolean(content.isRetrying),

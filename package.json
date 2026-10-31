@@ -1,6 +1,7 @@
 {
   "name": "endfield-menu-pro",
   "private": true,
+  "license": "GPL-3.0-only",
   "version": "1.0.0",
   "type": "module",
   "scripts": {

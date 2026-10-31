@@ -65,17 +65,20 @@ type ChapterCardSpec = {
   href?: string;
   /** 站点封面：放在标题卡下方的内容区 */
   image?: string;
+  /** 说明正文：与配图同一行铺在内容区（文案约 70%，配图约 30%） */
+  body?: string;
   /** 分组卡片（技术栈）：组内条目以旧版小卡形式铺在标题卡下方 */
   items?: DialogGroupItem[];
 };
 
 type ChapterCardEntry = ChapterCardSpec & { no: string; key: string };
 
-/** 把弹窗内容按图二章节卡排列：封面预览、meta 行、外链、技术栈条目依次编号；
-    失败源不进章节卡，统一由顶部的失败区（FailurePanel）展示，重试入口也在那里。 */
+/** 把弹窗内容按图二章节卡排列：说明正文、meta 行、外链、技术栈条目依次编号；
+    说明卡自带配图，不再单独生成预览卡；失败源不进章节卡，统一由顶部的失败区（FailurePanel）展示。 */
 function buildChapterCards(content: DialogContent): ChapterCardEntry[] {
   const cards: ChapterCardSpec[] = [];
-  if (content.image) cards.push({ tag: "PREVIEW", title: "预览", image: content.image });
+  if (content.body) cards.push({ tag: "NOTES", title: "公告信息", body: content.body, image: content.image });
+  else if (content.image) cards.push({ tag: "PREVIEW", title: "预览", image: content.image });
   for (const row of content.meta) {
     cards.push({ tag: "CHAPTER", title: row.label, value: row.value, href: row.href });
   }
@@ -136,7 +139,7 @@ function ChapterCard({ card }: { card: ChapterCardEntry }) {
       <span className="ef-idlg__chapter-icon" aria-hidden="true">
         <ChapterGlyph />
       </span>
-      {(card.items || card.image || card.value) && (
+      {(card.items || card.image || card.value || card.body) && (
         <span className="ef-idlg__chapter-content">
           {card.items && (
             <span className="ef-idlg__group-items">
@@ -151,7 +154,13 @@ function ChapterCard({ card }: { card: ChapterCardEntry }) {
               ))}
             </span>
           )}
-          {card.image && <img className="ef-idlg__chapter-shot" src={card.image} alt="" />}
+          {card.body && (
+            <span className="ef-idlg__notes">
+              <span className="ef-idlg__notes-text">{card.body}</span>
+              {card.image && <img className="ef-idlg__notes-shot" src={card.image} alt="" />}
+            </span>
+          )}
+          {!card.body && card.image && <img className="ef-idlg__chapter-shot" src={card.image} alt="" />}
           {card.value && <span className="ef-idlg__chapter-note">{card.value}</span>}
         </span>
       )}
